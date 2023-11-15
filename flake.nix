@@ -9,7 +9,7 @@ rec {
   let
     name = "nixos-upgrade";
 
-    2023-11-132023-11-15;
+    dateVer = "2023-11-13";
     semVer = "1.0.0-rc";
     version = "${dateVer}-${semVer}";
 
