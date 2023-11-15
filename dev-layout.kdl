@@ -11,7 +11,7 @@ layout {
         // }
         pane name="hx" {
 			command "hx"
-			args "./pkg/lib/nixos-upgrade.py" "./pkg/bin/nixos-upgrade" "./pkg/lib/privileged-worker" "./pkg/lib/synsignals.py" "./pkg/lib/colorformatter.py" "./flake.nix" "./dev-layout.kdl"
+			args "./src/lib/nixos-upgrade.py" "./src/bin/nixos-upgrade" "./src/lib/privileged-worker" "./src/lib/synsignals.py" "./src/lib/colorformatter.py" "./flake.nix" "./dev-layout.kdl"
 		}
         pane size="40%" {
             pane size="30%" name="nix build" start_suspended=true {
