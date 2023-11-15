@@ -64,7 +64,6 @@ rec {
     ];
 
     devShellInputs = with pkgs; [
-      stdenvNoCC
       # pylsp...
       pythonPackages.python-lsp-server
       # ...with providers
