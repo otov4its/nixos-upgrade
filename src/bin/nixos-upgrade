@@ -1,0 +1,292 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+export PATH="$PATH"
+
+# function array_to_lines {
+#   local a=("$1")
+#   printf -v a "%s\n" ${a[@]}
+#   printf "%s" "${a%?}"
+# }
+
+# function get_ign_sigs {
+#   local trap_print
+#   trap_print=$(trap -p)
+
+#   local sigs
+#   sigs=(
+#     $(cut --delimiter=" " --fields=4 <<< "$trap_print")
+#   )
+#   printf "%s" "${sigs[*]}"
+# }
+
+function get_term_core_default_action_sigs {
+  local sigs=(
+    SIGHUP SIGINT SIGQUIT SIGILL SIGTRAP SIGABRT SIGBUS SIGFPE SIGUSR1 SIGSEGV
+    SIGUSR2 SIGPIPE SIGALRM SIGTERM SIGSTKFLT SIGXCPU SIGXFSZ SIGVTALRM SIGPROF
+    SIGIO SIGPWR SIGSYS
+  )
+
+  local signums=()
+  local s
+  for s in "${sigs[@]}"
+  do
+    signums+=("$(kill -l "$s")")
+  done
+
+  # Real-time signals
+  for ((s=$(kill -l SIGRTMIN); s<=$(kill -l SIGRTMAX); s++)); do
+    signums+=("$s")
+  done
+
+  printf "%s" "${signums[*]}"
+}
+
+TERM_CORE_SIGS="$(get_term_core_default_action_sigs)"
+export TERM_CORE_SIGS
+
+function array_to_csv {
+  printf "%s" "${1// /,}"
+}
+
+# function get_signals_to_catch {
+#   local curr_ign_sigs
+#   curr_ign_sigs=$(get_ign_sigs)
+#   local all_term_sigs
+#   all_term_sigs=$(get_term_core_default_action_sigs)
+
+#   local union="$curr_ign_sigs $all_term_sigs"
+
+#   local unique
+#   unique=(
+#     $(
+#       array_to_lines "$union" | \
+#       sort | \
+#       uniq --unique
+#     )
+#   )
+
+#   printf "%s" "${unique[*]}"
+# }
+
+# function get_all_sigs_can_be_caught {
+#   local sigs
+#   sigs=(
+#     "$(
+#       env --ignore-signal bash -c "trap -p" | \
+#       cut --delimiter=" " --fields=4
+#     )"
+#   )
+#   printf "%s" "${sigs[*]}"
+# }
+# export -f get_all_sigs_can_be_caught
+
+# function intersect_two_arrays {
+#   local union="$1 $2"
+
+#   local intersection
+#   intersection=$(
+#       array_to_lines "${union[*]}" | \
+#       sort --numeric-sort | \
+#       uniq --repeated | \
+#       tr "\n" " "
+#   )
+#   if [[ "$intersection" ]]; then
+#     intersection="${intersection:0:-1}"
+#   fi
+
+#   printf "%s" "$intersection"
+# }
+
+# function check_sigs_should_be_handled {
+#   local -a sigs_to_check="${1-}"
+
+#   local -r sig_kill=9
+#   local -r sig_stop=19
+#   local -r proc_status=/proc/self/status
+#   local sig_blk
+#   sig_blk="$(grep -E "^SigBlk" $proc_status | cut --fields=2)"
+#   local sig_ign
+#   sig_ign="$(grep -E "^SigIgn" $proc_status | cut --fields=2)"
+
+#   local signum=64
+#   local -a sigs_all_available=()
+#   local i
+#   for (( i=0; i<16; i++ )); do
+#     local blk="${sig_blk:$i:1}"
+#     local ign="${sig_ign:$i:1}"
+#     local not_blk_ign=$(( ~("16#$blk" | "16#$ign") ))
+
+#     local j
+#     for (( j=3; j>=0; j-- )); do
+#       local mask=$(( 2**j ))
+#       local test=$(( not_blk_ign & mask ))
+#       if [[ $test -ne 0 ]]; then
+#         # KILL and STOP cannot be intercepted and handled
+#         if [[ $signum -ne $sig_kill && $signum -ne $sig_stop ]]; then
+#           sigs_all_available+=("$signum")
+#         fi
+#       fi
+#       signum=$(( signum - 1 ))
+#     done
+#   done
+
+#   local result
+#   result=$(intersect_two_arrays "${sigs_all_available[*]}" "$sigs_to_check")
+  
+#   printf "%s" "$result"
+# }
+
+# SIGINT=2
+# SIGTERM=15
+# SIGQUIT=3
+# SIGHUP=1
+# SIGUSR1=10
+# SIGUSR2=12
+# SIGS=$(get_signals_to_catch)
+
+# function if_sigs_then_trap {
+#   if [[ "$SIGS" ]]; then
+#     # shellcheck disable=SC2064,SC2086
+#     trap "$1" $SIGS
+#   fi
+# }
+
+# export SIGS
+
+# Temporarily ignore termination signals until
+# all interested parties set their handlers.
+# grep -E "^Name|^Pid:|^NSsid|^Uid|^Sig" /proc/$$/status
+# if_sigs_then_trap ""
+# grep -E "^Name|^Pid:|^NSsid|^Uid|^Sig" /proc/$$/status
+
+export NAME="nixos-upgrade"
+# Internal field separator for privileged process commands
+export CMD_IFS=":"
+export PY_SH_FD
+export SH_PY_FD
+export COMMIT_MSG_W_FD
+export COMMIT_MSG_R_FD
+export TMP_DIR
+
+readonly VERSION="@version@"
+
+abspath="$(realpath -s "$0")"
+absdir="$(dirname "${abspath}")"
+
+pyfile="$absdir/../lib/nixos-upgrade.py"
+worker="$absdir/../lib/privileged-worker"
+readonly MAN=@man@
+
+DROP_PRIV=(setpriv --reuid nobody --regid nobody
+                   --clear-groups --inh-caps=-all)
+
+function setup_ipc {
+  # Anonymous pipe hijacking trick
+  exec {PY_SH_FD}<><(:)
+  exec {SH_PY_FD}<><(:)
+
+  local tmp
+  tmp=$(mktemp)
+
+  # For git commit message use a regular file
+  exec {COMMIT_MSG_W_FD}>"$tmp"
+  exec {COMMIT_MSG_R_FD}<"$tmp"
+
+  rm "$tmp"
+}
+
+function mktemp_dir {
+  TMP_DIR=$(mktemp --directory --tmpdir "$NAME.XXXXXXXXXX")
+  readonly TMP_DIR
+}
+
+function log_error {
+  echo "$NAME: error: $*" >&2
+}
+
+function parse_options {
+  local color="auto"
+
+  local opt
+  for opt in "$@"; do
+    case $opt in
+      -h|--help)
+        man --pager=cat --local-file "$MAN" | head --lines=-4 | tail --lines=+3
+        exit 0
+      ;;
+
+      -V|--version)
+        echo "$VERSION"
+        exit 0
+      ;;
+
+      --color=*)
+        color="${opt#*=}"
+      ;;
+
+      --color)
+        color="next"
+      ;;
+
+      *)
+        if [[ "$color" == "next" ]]; then
+          color="$opt"
+        fi
+      ;;
+    esac
+  done
+
+  if [[ "$color" == "never" ]]; then
+    export NO_COLOR="1"
+  fi
+  if [[ "$color" == "always" ]]; then
+    export FORCE_COLOR="1"
+  fi
+}
+
+function check_singleton {
+  local LOCK_FD
+  exec {LOCK_FD}<"$worker"
+
+  if ! flock --nonblock $LOCK_FD; then
+    log_error "process is already running"
+    exit 1
+  fi
+}
+
+function check_permissions {
+  if ! "${DROP_PRIV[@]}" true; then
+    log_error "permission denied; try using 'sudo'"
+    exit 1
+  fi
+}
+
+function main {
+  parse_options "$@"
+
+  # Prohibit multiple runs
+  check_singleton
+
+  # Drop privelege permissions
+  check_permissions
+
+  mktemp_dir
+  setup_ipc
+
+  $worker &
+
+  # Drop priveleges.
+  # Blocking signals is here to give the python script time
+  # to set custom handlers for them in case such signals are
+  # received too early.
+  local py_opts=(-B -s)
+  exec "${DROP_PRIV[@]}" \
+      env --block-signal="$(array_to_csv "$TERM_CORE_SIGS")" HOME=/var/empty \
+        python "${py_opts[@]}" "$pyfile" "$@"
+}
+
+main "$@"

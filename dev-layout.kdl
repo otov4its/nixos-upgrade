@@ -1,0 +1,27 @@
+layout {
+    pane size=1 borderless=true {
+        plugin location="zellij:tab-bar"
+    }
+    // pane size=1 borderless=true {
+    //     plugin location="zellij:compact-bar"
+    // }
+    pane split_direction="vertical" {
+        // pane size="15%" {
+        //     plugin location="zellij:strider"
+        // }
+        pane name="hx" {
+			command "hx"
+			args "./pkg/lib/nixos-upgrade.py" "./pkg/bin/nixos-upgrade" "./pkg/lib/privileged-worker" "./pkg/lib/synsignals.py" "./pkg/lib/colorformatter.py" "./flake.nix" "./dev-layout.kdl"
+		}
+        pane size="40%" {
+            pane size="30%" name="nix build" start_suspended=true {
+                command "nix"
+                args "build"
+            }
+            pane
+        }
+    }
+    pane size=2 borderless=true {
+        plugin location="zellij:status-bar"
+    }
+}

@@ -1,0 +1,247 @@
+#!/usr/bin/env bash
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+readonly OK=OK
+readonly ERR=ERR
+readonly EXIT=EXIT
+
+readonly LOCK_FILE_NAME=flake.lock
+readonly FLAKE_ROOT=flake.nix
+readonly CURRENT_SYSTEM=/run/current-system
+readonly SYSTEM_PROFILE=/nix/var/nix/profiles/system
+
+declare -g FLAKE_DIR
+declare -g LOCK_FILE
+declare -g TMP_LOCK_FILE
+
+function writeline_to_py {
+  printf "%s\n" "$1" >&"$SH_PY_FD"
+}
+
+function send_ok {
+  writeline_to_py $OK
+}
+
+function send_err {
+  writeline_to_py $ERR
+}
+
+function send_result {
+  if [[ $? -eq 0 ]]; then
+    send_ok
+  else
+    send_err
+  fi
+}
+
+function is_git {
+  local git_repo=()
+  local is_inside_git
+  if [ "$1" ]; then
+    git_repo=(-C "$1")
+  fi
+
+  is_inside_git=$(
+    git "${git_repo[@]}" rev-parse --is-inside-work-tree 2>&1 || true
+  )
+
+  [[ "$is_inside_git" == "true" ]]
+}
+
+function get_git_dir_path {
+  local git_repo=()
+
+  if [ "$1" ]; then
+    git_repo=(-C "$1")    
+  fi
+
+  git "${git_repo[@]}" rev-parse --absolute-git-dir
+}
+
+function parse_cmd {
+  local args=("$@")
+
+  local cmd="${args[0]}"
+  args=("${args[@]:1}")
+
+  case "$cmd" in
+    "get_current_system_closure")
+      local closure
+
+      closure=$(readlink --canonicalize-existing --no-newline "$CURRENT_SYSTEM")
+
+      writeline_to_py "$closure"
+    ;;
+
+    "resolve_flake_dir")
+      local dir="${args[0]}"
+
+      FLAKE_DIR=$(readlink --canonicalize-missing --no-newline "$dir")
+
+      if
+        [[ -e $FLAKE_DIR && ! -d $FLAKE_DIR ]]
+      then
+        FLAKE_DIR=$(dirname "$FLAKE_DIR")
+      fi
+
+      readonly FLAKE_DIR
+
+      writeline_to_py "$FLAKE_DIR"
+    ;;
+
+    "is_dir_flake_exists")
+      LOCK_FILE="$FLAKE_DIR/$LOCK_FILE_NAME"
+      readonly LOCK_FILE
+
+      test -d "$FLAKE_DIR"
+      send_result
+    ;;
+    
+    "is_flake_file_exists")
+      local flake_file="$FLAKE_DIR/$FLAKE_ROOT"
+
+      test -e "$flake_file"
+      send_result
+    ;;
+    
+    "setup_tmp_dir")
+      TMP_LOCK_FILE="$TMP_DIR/$LOCK_FILE_NAME"
+      readonly TMP_LOCK_FILE
+
+      local git_dir
+
+      cp --reflink=auto --no-dereference --recursive \
+        "$FLAKE_DIR/." "$TMP_DIR/"
+
+      if
+        is_git "$TMP_DIR"
+      then
+        rm --recursive "$(get_git_dir_path "$TMP_DIR")"
+      fi
+      
+      send_ok
+    ;;
+
+    "check_nixos_config")
+      local out
+    
+      out=$(nix flake show "$TMP_DIR")
+
+      [[ "$out" = *"nixosConfigurations"* ]]
+      send_result
+    ;;
+
+    "update_lock_file")
+      nix flake update "$TMP_DIR"
+      send_result
+    ;;
+
+    "build")
+      local config="${args[0]}"
+      local closure
+      local -r out_link="$TMP_DIR"/result
+      
+      if 
+        nix build --out-link "$out_link" "$config"
+      then
+        closure=$(readlink --canonicalize-existing --no-newline "$out_link")
+
+        send_ok
+        writeline_to_py "$closure"
+      else
+        send_err
+      fi
+    ;;
+
+    "upgrade")
+      local closure="${args[0]}"
+
+      # Ignore all signals which can terminate upgrading and committing
+      # shellcheck disable=SC2086
+      trap "" $TERM_CORE_SIGS
+      
+      nix-env --profile "$SYSTEM_PROFILE" --set "$closure" &&
+      cp --update --no-preserve=ownership,mode "$TMP_LOCK_FILE" "$LOCK_FILE" &&
+      "$closure/bin/switch-to-configuration" switch
+
+      send_result
+    ;;
+
+    "commit")
+      local as_owner=()
+      local git=(git -C "$FLAKE_DIR")
+      local git_dir
+      local repo_owner
+
+      # Only if the flake is a git repo
+      if
+        is_git "$FLAKE_DIR"
+      then
+        # If root then commit as a repo owner
+        if
+          [ $EUID -eq 0 ]
+        then
+          git_dir="$(get_git_dir_path "$FLAKE_DIR")"
+          repo_owner="$(stat --format="%U" "$git_dir")"
+
+          as_owner=(runuser -u "$repo_owner" --)
+        fi      
+        
+        GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="<>" \
+        "${as_owner[@]}" "${git[@]}" commit \
+        --allow-empty --all --file=- <&"$COMMIT_MSG_R_FD"
+
+        send_result
+
+      else
+        writeline_to_py "NOT_GIT"
+      fi
+    ;;
+    
+    "exit")
+      exit 0
+    ;;
+    
+    *)
+      echo "$NAME: privileged-worker: error: unrecognized command"
+      exit 1
+    ;;
+  esac
+}
+
+function cleanup {
+  if
+    [[ "$TMP_DIR" ]]
+  then
+    rm --recursive "$TMP_DIR"
+  fi
+}
+
+function on_exit {
+  cleanup
+  writeline_to_py "$EXIT"
+}
+
+function on_error {
+  send_err
+}
+
+function main {
+  trap on_exit EXIT
+  trap on_error ERR
+
+  while
+    IFS="$CMD_IFS" read -u "$PY_SH_FD" -ra cmd
+  do
+    # Pong to python for detecting whether
+    # the privileged process is running
+    writeline_to_py "PONG"
+
+    parse_cmd "${cmd[@]}"
+  done
+}
+
+main
