@@ -9,8 +9,8 @@ rec {
   let
     name = "nixos-upgrade";
 
-    dateVer = "2023-11-13";
-    semVer = "1.0.0-rc";
+    dateVer = "2023-11-16";
+    semVer = "1.0.0";
     version = "${dateVer}-${semVer}";
 
     src = ./src;
