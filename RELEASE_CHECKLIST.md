@@ -7,9 +7,7 @@
 - [ ] git commit -a -m "Release vX.Y.Z"
 - [ ] git merge into stable branch
 - [ ] git tag -a vX.Y.Z
-- [ ] git push branches and tags
-
-# After release
-
 - [ ] main branch: flake.nix: bump `semVer` and add "-rc" suffix
 - [ ] main branch: git commit -a -m "rc version"
+- [ ] git push branches and tags
+
