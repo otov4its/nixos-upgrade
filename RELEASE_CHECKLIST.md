@@ -9,5 +9,6 @@
 - [ ] git tag -a vX.Y.Z
 - [ ] main branch: flake.nix: bump `semVer` and add "-rc" suffix
 - [ ] main branch: git commit -a -m "rc version"
-- [ ] git push branches and tags
+- [ ] git push origin --all
+- [ ] git push origin --tags
 
