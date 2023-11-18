@@ -5,6 +5,7 @@
 - [ ] CHANGELOG.md: update
 - [ ] check if `nix build`
 - [ ] git commit -a -m "Release vX.Y.Z"
+- [ ] git checkout stable
 - [ ] git merge into stable branch
 - [ ] git tag -a vX.Y.Z
 - [ ] main branch: flake.nix: bump `semVer` and add "-rc" suffix
