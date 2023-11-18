@@ -4,7 +4,20 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-export PATH="$PATH"
+export PATH="@path@"
+export NAME="@name@"
+# Internal field separator for privileged process commands
+export CMD_IFS=":"
+export PY_SH_FD
+export SH_PY_FD
+export COMMIT_MSG_W_FD
+export COMMIT_MSG_R_FD
+export TMP_DIR
+export TERM_CORE_SIGS
+
+readonly WORKER="@worker@"
+readonly DROP_PRIV=(setpriv --reuid nobody --regid nobody
+                   --clear-groups --inh-caps=-all)
 
 function get_term_core_default_action_sigs {
   local sigs=(
@@ -29,32 +42,10 @@ function get_term_core_default_action_sigs {
 }
 
 TERM_CORE_SIGS="$(get_term_core_default_action_sigs)"
-export TERM_CORE_SIGS
 
 function array_to_csv {
   printf "%s" "${1// /,}"
 }
-
-export NAME="nixos-upgrade"
-# Internal field separator for privileged process commands
-export CMD_IFS=":"
-export PY_SH_FD
-export SH_PY_FD
-export COMMIT_MSG_W_FD
-export COMMIT_MSG_R_FD
-export TMP_DIR
-
-readonly VERSION="@version@"
-
-abspath="$(realpath -s "$0")"
-absdir="$(dirname "${abspath}")"
-
-pyfile="$absdir/../lib/nixos-upgrade.py"
-worker="$absdir/../lib/privileged-worker"
-readonly MAN=@man@
-
-DROP_PRIV=(setpriv --reuid nobody --regid nobody
-                   --clear-groups --inh-caps=-all)
 
 function setup_ipc {
   # Anonymous pipe hijacking trick
@@ -87,12 +78,12 @@ function parse_options {
   for opt in "$@"; do
     case $opt in
       -h|--help)
-        man --pager=cat --local-file "$MAN" | head --lines=-4 | tail --lines=+3
+        man --pager=cat --local-file "@man@" | head --lines=-4 | tail --lines=+3
         exit 0
       ;;
 
       -V|--version)
-        echo "$VERSION"
+        echo "@version@"
         exit 0
       ;;
 
@@ -122,7 +113,7 @@ function parse_options {
 
 function check_singleton {
   local LOCK_FD
-  exec {LOCK_FD}<"$worker"
+  exec {LOCK_FD}<"$WORKER"
 
   if ! flock --nonblock $LOCK_FD; then
     log_error "process is already running"
@@ -149,16 +140,16 @@ function main {
   mktemp_dir
   setup_ipc
 
-  $worker &
+  $WORKER &
 
   # Drop priveleges.
   # Blocking signals is here to give the python script time
   # to set custom handlers for them in case such signals are
   # received too early.
-  local py_opts=(-B -s)
+  local py_opts=(@py_opts@)
   exec "${DROP_PRIV[@]}" \
       env --block-signal="$(array_to_csv "$TERM_CORE_SIGS")" HOME=/var/empty \
-        python "${py_opts[@]}" "$pyfile" "$@"
+        python "${py_opts[@]}" "@pyfile@" "$@"
 }
 
 main "$@"

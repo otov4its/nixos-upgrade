@@ -11,9 +11,9 @@ rec {
 
     dateVer = "2023-11-16";
     semVer = "1.0.1-rc";
-    version = "${dateVer}-${semVer}";
+    packageVersion = "${dateVer}-${semVer}";
 
-    src = ./src;
+    packageSrc = ./src;
 
     binSrc = "./bin/${name}";
     outBin = "$out/${binSrc}";
@@ -85,13 +85,16 @@ rec {
       fish
       zellij
     ] ++ runtimeInputs;
+
+    pyOptsDev = "-B -s";
+    pyOptsProd = "-B -s -OO -E -Wignore --check-hash-based-pycs never";
   in
   rec {
-    packages = {
-      "${name}" = pkgs.stdenvNoCC.mkDerivation {
+    packages = rec {
+      default = pkgs.stdenvNoCC.mkDerivation rec {
         pname = name;
-        version = version;
-        src = src;
+        version = packageVersion;
+        src = packageSrc;
 
         nativeBuildInputs = with pkgs; [
           python
@@ -107,6 +110,15 @@ rec {
           substituteInPlace ${binSrc} \
             --replace "@man@" "$out/${manPageGz}" \
             --replace "@version@" "${version}" \
+            --replace "@name@" "${name}" \
+            --replace "@path@" "${pkgs.lib.makeBinPath runtimeInputs}" \
+            --replace "@worker@" "${outLibDir}/privileged-worker" \
+            --replace "@pyfile@" "${outLibDir}/${name}.py" \
+        '';
+
+        postBuild = ''
+          substituteInPlace ${binSrc} \
+            --replace "@py_opts@" "${pyOptsProd}"
         '';
 
         buildPhase = ''
@@ -131,17 +143,6 @@ rec {
           runHook postInstall
         '';
 
-        postInstall = ''
-          substituteInPlace ${outBin} \
-            --replace "\$PATH" "${pkgs.lib.makeBinPath runtimeInputs}" \
-            --replace "export NAME=" "export NAME=\"${name}\" #orig value: " \
-            --replace "abspath=" "# abspath=" \
-            --replace "absdir=" "# absdir=" \
-            --replace "pyfile=" "pyfile=\"${outLibDir}/${name}.py\" #orig value: " \
-            --replace "worker=" "worker=\"${outLibDir}/privileged-worker\" #orig value: " \
-            --replace "-B -s" "-B -s -OO -E -Wignore --check-hash-based-pycs never"
-        '';
-
         doInstallCheck = true;
         nativeInstallCheckInputs = [ pkgs.shellcheck pyFlakes ];
         installCheckPhase = ''
@@ -158,10 +159,17 @@ rec {
           runHook postCheck
         '';
       };
+
+      dev = default.overrideAttrs (finalAttrs: prevAttrs: {
+        postBuild = ''
+          substituteInPlace ${binSrc} \
+            --replace "@py_opts@" "${pyOptsDev}"
+        '';
+      });
+
+      ${name} = default;
     };
-
-    packages.default = packages."${name}";
-
+    
     devShells = {
       default = pkgs.mkShell {
         packages = devShellInputs;

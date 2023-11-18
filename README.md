@@ -63,6 +63,8 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
 
 ```bash
 $ nix develop
+$ nix build .#dev
+$ ./result-dev/bin/nixos-upgrade
 ```
 
 # Changelog

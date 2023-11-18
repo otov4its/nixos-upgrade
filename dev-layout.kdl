@@ -8,9 +8,13 @@ layout {
 			args "./src/lib/nixos-upgrade.py" "./src/bin/nixos-upgrade" "./src/lib/privileged-worker" "./src/lib/synsignals.py" "./src/lib/colorformatter.py" "./flake.nix" "./dev-layout.kdl"
 		}
         pane size="40%" {
-            pane size="30%" name="nix build" start_suspended=true {
+            pane size="15%" name="nix build" start_suspended=true {
                 command "nix"
                 args "build"
+            }
+            pane size="15%" name="nix build .#dev" start_suspended=true {
+                command "nix"
+                args "build" "--out-link" "result-dev" ".#dev"
             }
             pane
         }
