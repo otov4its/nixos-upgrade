@@ -133,8 +133,6 @@ class CliProgram:
 
         self.exit(self.EXIT_ERR_CODE, f"{exc_value}", logging.CRITICAL)
 
-        # self.logger.critical(f"{exc_value}")
-
     def get_current_system_closure(self):
         current_system_closure = self.run_privileged_task(
             "get_current_system_closure")
@@ -199,8 +197,6 @@ class CliProgram:
                 if self.debug_mode:
                     sys.stderr.write(line)
 
-            # TODO: pty; print oneliners; catch in bufsize=1 escape symbols
-
             # So as not to be intrusive
             time.sleep(self.POLLING_PROC_SECS)
 
@@ -235,14 +231,6 @@ class CliProgram:
     def clear_color(text):
         termcolor_regex = r'\033\[[0-9;]+m'
         return re.sub(termcolor_regex, '', text)
-
-    # def colored_output(command: str = ""):
-    #     colored_out = run(f"script -q -c '{command}' /dev/null",
-    #                       check=True,
-    #                       capture_output=True,
-    #                       shell=True,
-    #                       text=True)
-    #     return colored_out
 
     def parse_args(self):
         parser = argparse.ArgumentParser(
@@ -346,13 +334,6 @@ class CliProgram:
     def get_fmt_str(self):
         return colorformatter.ColorFormatter.COLOR_FORMAT
 
-        # if self.STDIN_IS_A_TTY and self.STDOUT_IS_A_TTY:
-        #     return fmt
-        # else:
-        #     # For convenient identification of message emitter in pipes
-        #     return "%(name)s: " + fmt
-
-    # TODO: add logging to system logger
     def get_logger(self) -> logging.Logger:
         this_module = sys.modules[__name__]
         # https://docs.python.org/3/howto/logging.html#exceptions-raised-during-logging
@@ -501,13 +482,6 @@ class CliProgram:
         elif msg:
             print(msg)
 
-        # if code != os.EX_OK:
-        #     self.logger.error("Exit")
-
-        # if self.termination_signum:
-        #     signal.signal(self.termination_signum, signal.SIG_DFL)
-        #     signal.raise_signal(self.termination_signum)
-
         sys.exit(code)
 
     @property
@@ -621,9 +595,6 @@ class CliProgram:
     def print_updates(self):
         self.process_diff()
         print(self.diff)
-        # for line in self.diff.splitlines():
-        #     # Hack with colored("") for reset color code before colored `line`
-        #     self.logger.warning("  " + termcolor.colored("") + line)
 
     @synsignals.add_handling
     def upgrade_system(self):
