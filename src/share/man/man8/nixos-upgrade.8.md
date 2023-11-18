@@ -15,6 +15,9 @@ footer: "@name@ @version@"
 `-h, --help`
 : show this help message and exit
 
+`-V, --version`
+: show `@name@` version
+
 `--flake=`*DIR*
 : flake dir with nixos configuration (default: */etc/nixos/*)
 
