@@ -89,7 +89,7 @@ rec {
     pyOptsDev = "-B -s";
     pyOptsProd = "-B -s -OO -E -Wignore --check-hash-based-pycs never";
   in
-  rec {
+  {
     packages = rec {
       default = pkgs.stdenvNoCC.mkDerivation rec {
         pname = name;
