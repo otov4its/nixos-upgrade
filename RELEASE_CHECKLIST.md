@@ -6,7 +6,7 @@
 - [ ] check if `nix build`
 - [ ] git commit -a -m "Release vX.Y.Z"
 - [ ] git checkout stable
-- [ ] git merge into stable branch
+- [ ] git merge main
 - [ ] git tag -a vX.Y.Z
 - [ ] main branch: flake.nix: bump `semVer` and add "-rc" suffix
 - [ ] main branch: git commit -a -m "rc version"
