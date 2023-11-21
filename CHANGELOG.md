@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* Nothing
+* A more informative message on drop privileges to 'nodody' error
 
 ## 2023-11-18-1.0.1
 
