@@ -178,7 +178,7 @@ rec {
           # zellij session
           export EDITOR=hx
           exec zellij --session update-nixos-dev \
-            --layout dev-layout.kdl
+            --new-session-with-layout dev-layout.kdl
         '';
       };
     };
