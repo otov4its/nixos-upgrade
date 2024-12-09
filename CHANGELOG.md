@@ -3,6 +3,7 @@
 ## Unreleased
 
 * A more informative message on drop privileges to 'nobody' error
+* `flake.nix` `inputs` to 24.11 NixOs
 
 ## 2023-11-18-1.0.1
 
