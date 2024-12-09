@@ -1,6 +1,6 @@
 # Release Checklist
 
-- [ ] flake.nix: bump the version (`dateVer` and `semVer`)
+- [ ] flake.nix: bump the version `dateVer`
 - [ ] flake.nix: remove "-rc" suffix in `semVer`
 - [ ] CHANGELOG.md: update
 - [ ] check if `nix build`
