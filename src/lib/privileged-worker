@@ -135,7 +135,7 @@ function parse_cmd {
     ;;
 
     "update_lock_file")
-      nix flake update "$TMP_DIR"
+      nix flake update --flake "$TMP_DIR"
       send_result
     ;;
 
