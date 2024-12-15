@@ -8,6 +8,7 @@ export PATH="@path@"
 export NAME="@name@"
 # Internal field separator for privileged process commands
 export CMD_IFS=":"
+export LOCK_FD
 export PY_SH_FD
 export SH_PY_FD
 export COMMIT_MSG_W_FD
@@ -112,7 +113,6 @@ function parse_options {
 }
 
 function check_singleton {
-  local LOCK_FD
   exec {LOCK_FD}<"$WORKER"
 
   if ! flock --nonblock $LOCK_FD; then
