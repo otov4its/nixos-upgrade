@@ -4,6 +4,10 @@
 
 * Nothing
 
+## 2024-12-16-1.0.3
+
+* Fixed "File descriptor leaked on lvs invocation" warnings
+
 ## 2024-12-10-1.0.2
 
 * A more informative message on drop privileges to 'nobody' error

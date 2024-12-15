@@ -9,8 +9,8 @@ rec {
   let
     name = "nixos-upgrade";
 
-    dateVer = "2024-12-10";
-    semVer = "1.0.3-rc";
+    dateVer = "2024-12-16";
+    semVer = "1.0.3";
     packageVersion = "${dateVer}-${semVer}";
 
     packageSrc = ./src;
