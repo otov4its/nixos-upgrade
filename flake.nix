@@ -10,7 +10,7 @@ rec {
     name = "nixos-upgrade";
 
     dateVer = "2026-07-01";
-    semVer = "1.0.4";
+    semVer = "1.0.5-rc";
     packageVersion = "${dateVer}-${semVer}";
 
     packageSrc = ./src;
