@@ -2,15 +2,15 @@ rec {
   description = "NixOS upgrade showing what will be changed";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
   };
 
   outputs = { self, nixpkgs }:
   let
     name = "nixos-upgrade";
 
-    dateVer = "2024-12-16";
-    semVer = "1.0.4-rc";
+    dateVer = "2026-07-01";
+    semVer = "1.0.4";
     packageVersion = "${dateVer}-${semVer}";
 
     packageSrc = ./src;
@@ -38,7 +38,7 @@ rec {
   let
     pkgs = import nixpkgs { inherit system; };
 
-    python = pkgs.python311;
+    python = pkgs.python3;
     pythonWithPkgs = python.withPackages (ps: with ps; [
         yaspin
         termcolor
@@ -75,7 +75,7 @@ rec {
       # Toml LSP
       taplo
       # bash LSP
-      nodePackages.bash-language-server
+      bash-language-server
       shellcheck
       # Markdown LSP
       marksman
@@ -97,7 +97,7 @@ rec {
         src = packageSrc;
 
         nativeBuildInputs = with pkgs; [
-          python
+          python3
           pandoc
         ];
 
@@ -176,9 +176,13 @@ rec {
 
         shellHook = ''
           # zellij session
-          export EDITOR=hx
-          exec zellij --session update-nixos-dev \
-            --new-session-with-layout dev-layout.kdl
+          SESSION_NAME="nixos-upgrade-dev"
+          if ! zellij list-sessions | grep -q "$SESSION_NAME"; then
+            export EDITOR=hx
+            exec zellij --session "$SESSION_NAME" \
+                        --new-session-with-layout dev-layout.kdl
+          fi
+          zellij attach "$SESSION_NAME"
         '';
       };
     };

@@ -4,6 +4,10 @@
 
 * Nothing
 
+## 2026-07-01-1.0.4
+
+* Bumped versions
+
 ## 2024-12-16-1.0.3
 
 * Fixed "File descriptor leaked on lvs invocation" warnings
