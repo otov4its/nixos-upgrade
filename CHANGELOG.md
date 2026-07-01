@@ -4,6 +4,11 @@
 
 * Nothing
 
+## 2026-07-01-1.0.5
+
+* Fixed 'system' has been renamed to/replaced by 'stdenv.hostPlatform.system' evaluation warning
+* Fixed nested list in attribute 'nativeBuildInputs' warning
+
 ## 2026-07-01-1.0.4
 
 * Bumped versions

@@ -10,7 +10,7 @@ rec {
     name = "nixos-upgrade";
 
     dateVer = "2026-07-01";
-    semVer = "1.0.5-rc";
+    semVer = "1.0.5";
     packageVersion = "${dateVer}-${semVer}";
 
     packageSrc = ./src;
@@ -66,8 +66,6 @@ rec {
     devShellInputs = with pkgs; [
       # pylsp...
       pythonPackages.python-lsp-server
-      # ...with providers
-      pyFlakes
       # Helix code editor
       helix
       # Nix LSP for Helix
@@ -84,7 +82,7 @@ rec {
       # Fish shell
       fish
       zellij
-    ] ++ runtimeInputs;
+    ] ++ pyFlakes ++ runtimeInputs;
 
     pyOptsDev = "-B -s";
     pyOptsProd = "-B -s -OO -E -Wignore --check-hash-based-pycs never";
@@ -96,9 +94,9 @@ rec {
         version = packageVersion;
         src = packageSrc;
 
-        nativeBuildInputs = with pkgs; [
-          python3
-          pandoc
+        nativeBuildInputs = [
+          pkgs.python3
+          pkgs.pandoc
         ];
 
         preBuild = ''
@@ -144,7 +142,7 @@ rec {
         '';
 
         doInstallCheck = true;
-        nativeInstallCheckInputs = [ pkgs.shellcheck pyFlakes ];
+        nativeInstallCheckInputs = [ pkgs.shellcheck ] ++ pyFlakes;
         installCheckPhase = ''
           runHook preCheck
 
@@ -191,7 +189,7 @@ rec {
       { config, lib, pkgs, ... }:
       let
         cfg = config.programs.${name};
-        system = pkgs.system;
+        system = pkgs.stdenv.hostPlatform.system;
       in {
         options = {
           programs.${name} = {
