@@ -31,7 +31,7 @@ rec {
     ];
 
     eachSystem = with nixpkgs.lib; (
-      f: foldAttrs mergeAttrs { } 
+      f: foldAttrs mergeAttrs { }
         (map (s: mapAttrs (_: v: { ${s} = v; }) (f s)) systems)
     );
   in eachSystem (system:
@@ -66,22 +66,28 @@ rec {
     devShellInputs = with pkgs; [
       # pylsp...
       pythonPackages.python-lsp-server
-      # Helix code editor
-      helix
-      # Nix LSP for Helix
+
+      # Nix LSP
       nil
+      nixd
+      statix
+      deadnix
+
       # Toml LSP
       taplo
+
       # bash LSP
       bash-language-server
       shellcheck
+
       # Markdown LSP
       marksman
+
       # Pandoc
       pandoc
-      # Fish shell
-      fish
-      zellij
+
+      # Sandboxing for agents
+      bubblewrap
     ] ++ pyFlakes ++ runtimeInputs;
 
     pyOptsDev = "-B -s";
@@ -167,21 +173,21 @@ rec {
 
       ${name} = default;
     };
-    
+
     devShells = {
       default = pkgs.mkShell {
         packages = devShellInputs;
 
-        shellHook = ''
-          # zellij session
-          SESSION_NAME="nixos-upgrade-dev"
-          if ! zellij list-sessions | grep -q "$SESSION_NAME"; then
-            export EDITOR=hx
-            exec zellij --session "$SESSION_NAME" \
-                        --new-session-with-layout dev-layout.kdl
-          fi
-          zellij attach "$SESSION_NAME"
-        '';
+        # shellHook = ''
+        #   # zellij session
+        #   SESSION_NAME="nixos-upgrade-dev"
+        #   if ! zellij list-sessions | grep -q "$SESSION_NAME"; then
+        #     export EDITOR=hx
+        #     exec zellij --session "$SESSION_NAME" \
+        #                 --new-session-with-layout dev-layout.kdl
+        #   fi
+        #   zellij attach "$SESSION_NAME"
+        # '';
       };
     };
   }) // rec {
@@ -206,10 +212,10 @@ rec {
             };
           };
         };
-      
+
         config = lib.mkIf cfg.enable {
           nix.settings.experimental-features = ["nix-command" "flakes"];
-          
+
           environment.systemPackages = (
             lib.optional (cfg.package != null) cfg.package);
         };
