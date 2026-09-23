@@ -35,9 +35,10 @@ footer: "@name@ @version@"
 `-y, --assume-yes`
 : when a yes/no prompt would be presented, assume that the user entered "y".
   In particular, suppresses the prompt that appears when upgrading system.
+  Mutually exclusive with `-n, --assume-no`.
 
 `-n, --assume-no`
-: likewise `--assume-yes`, but no
+: likewise `--assume-yes`, but no. Mutually exclusive with `-y, --assume-yes`.
 
 `-v, --verbose`
 : increase verbosity

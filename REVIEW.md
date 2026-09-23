@@ -402,7 +402,7 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
 1. **Safety fixes on this branch** (small, low risk, independent of the
    architecture decision):
    - [x] A.1 avoided by using the original Git worktree (Choice 3)
-   - [ ] A.6 `-y`/`-n` mutually exclusive
+   - [x] A.6 `-y`/`-n` mutually exclusive
    - [ ] A.6 `has_pkgs_changes` via `count_changes`
    - [ ] A.6 `logging.raiseExceptions`
    - [ ] A.6 `PreserveHandler` → plain functions

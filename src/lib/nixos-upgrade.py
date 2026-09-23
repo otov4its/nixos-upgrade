@@ -252,14 +252,17 @@ class CliProgram:
                             default="",
                             type=str)
 
-        parser.add_argument('-y', '--assume-yes', action='store_true',
-                            help=('when a yes/no prompt would be presented, '
-                                  'assume that the user entered "yes". '
-                                  'In particular, suppresses the prompt that '
-                                  'appears when upgrading system.'))
+        assume_group = parser.add_mutually_exclusive_group()
+        assume_group.add_argument(
+            '-y', '--assume-yes', action='store_true',
+            help=('when a yes/no prompt would be presented, '
+                  'assume that the user entered "yes". '
+                  'In particular, suppresses the prompt that '
+                  'appears when upgrading system.'))
 
-        parser.add_argument('-n', '--assume-no', action='store_true',
-                            help='likewise --assume-yes')
+        assume_group.add_argument(
+            '-n', '--assume-no', action='store_true',
+            help='likewise --assume-yes')
 
         parser.add_argument('-c', '--no-commit', action='store_true',
                             help='do not commit a flake repo')
