@@ -498,10 +498,7 @@ class CliProgram:
         return (self.logger.level == logging.DEBUG)
 
     def has_pkgs_changes(self) -> bool:
-        # Marker of updates in packages
-        regex = r"\[.+\]"
-
-        return True if re.search(regex, self.diff) else False
+        return self.count_changes().all > 0
 
     def count_changes(self):
         diff = self.clear_color(self.diff)

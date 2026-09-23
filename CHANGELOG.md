@@ -5,6 +5,8 @@
 * Build directly from the Git worktree so Nix uses Git-indexed source files
   and no copied flake tree is created.
 * Reject conflicting `--assume-yes` and `--assume-no` options.
+* Classify package changes using NVD status markers instead of arbitrary
+  bracketed text.
 
 ## 2026-07-01-1.0.5
 
