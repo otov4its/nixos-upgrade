@@ -47,7 +47,6 @@ class CliProgram:
     SH_PY_FD = int(os.environ["SH_PY_FD"])
     COMMIT_MSG_W_FD = int(os.environ["COMMIT_MSG_W_FD"])
     IFS = os.environ["CMD_IFS"]
-    TMP_DIR = pathlib.Path(os.environ["TMP_DIR"])
 
     def __init__(self):
         self.from_worker_file = os.fdopen(self.SH_PY_FD, "r")
@@ -435,10 +434,10 @@ class CliProgram:
             self.exit_with_error(f"{flake_dir}: this dir is not a flake")
         self.logger.debug("  and it's a flake")
 
-        cp_result = self.run_privileged_task("setup_tmp_dir")
+        lock_result = self.run_privileged_task("setup_tmp_lock")
 
-        if cp_result != "OK":
-            self.exit_with_error("copying flake dir problem")
+        if lock_result != "OK":
+            self.exit_with_error("preparing temporary lock file problem")
 
         check_nixos_config = self.run_privileged_task("check_nixos_config")
 
@@ -554,7 +553,7 @@ class CliProgram:
 
     @synsignals.add_handling
     def build_nixos_system(self):
-        nixos_config = (f"{self.TMP_DIR}#"
+        nixos_config = (f"{self.args.flake}#"
                         f"{self.NIXOS_CONFIG_FLAKE_OUT}")
         self.logger.debug(f"{nixos_config=}")
 

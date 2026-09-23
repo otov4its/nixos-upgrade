@@ -107,35 +107,30 @@ function parse_cmd {
       send_result
     ;;
     
-    "setup_tmp_dir")
+    "setup_tmp_lock")
       TMP_LOCK_FILE="$TMP_DIR/$LOCK_FILE_NAME"
       readonly TMP_LOCK_FILE
 
-      local git_dir
-
-      cp --reflink=auto --no-dereference --recursive \
-        "$FLAKE_DIR/." "$TMP_DIR/"
-
-      if
-        is_git "$TMP_DIR"
-      then
-        rm --recursive "$(get_git_dir_path "$TMP_DIR")"
+      if [[ -e "$LOCK_FILE" ]]; then
+        cp --reflink=auto -- "$LOCK_FILE" "$TMP_LOCK_FILE"
       fi
-      
+
       send_ok
     ;;
 
     "check_nixos_config")
       local out
     
-      out=$(nix flake show "$TMP_DIR")
+      out=$(nix flake show --no-write-lock-file "$FLAKE_DIR")
 
       [[ "$out" = *"nixosConfigurations"* ]]
       send_result
     ;;
 
     "update_lock_file")
-      nix flake update --flake "$TMP_DIR"
+      nix flake update \
+        --flake "$FLAKE_DIR" \
+        --output-lock-file "$TMP_LOCK_FILE"
       send_result
     ;;
 
@@ -143,9 +138,14 @@ function parse_cmd {
       local config="${args[0]}"
       local closure
       local -r out_link="$TMP_DIR"/result
+      local lock_args=(--no-write-lock-file)
+
+      if [[ -e "$TMP_LOCK_FILE" ]]; then
+        lock_args+=(--reference-lock-file "$TMP_LOCK_FILE")
+      fi
       
       if 
-        nix build --out-link "$out_link" "$config"
+        nix build --out-link "$out_link" "${lock_args[@]}" "$config"
       then
         closure=$(readlink --canonicalize-existing --no-newline "$out_link")
 
@@ -178,7 +178,10 @@ function parse_cmd {
         exec {COMMIT_MSG_R_FD}<&-
 
         nix-env --profile "$SYSTEM_PROFILE" --set "$closure" &&
-        cp --update --no-preserve=ownership,mode "$TMP_LOCK_FILE" "$LOCK_FILE" &&
+        if [[ -e "$TMP_LOCK_FILE" ]]; then
+          cp --update --no-preserve=ownership,mode \
+            "$TMP_LOCK_FILE" "$LOCK_FILE"
+        fi &&
         "$closure/bin/switch-to-configuration" switch
       )
 

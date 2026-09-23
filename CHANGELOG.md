@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-* Nothing
+* Build directly from the Git worktree so Nix uses Git-indexed source files
+  and no copied flake tree is created.
 
 ## 2026-07-01-1.0.5
 

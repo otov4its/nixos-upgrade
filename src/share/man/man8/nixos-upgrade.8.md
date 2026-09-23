@@ -19,7 +19,9 @@ footer: "@name@ @version@"
 : show `@name@` version
 
 `--flake=`*DIR*
-: flake dir with nixos configuration (default: */etc/nixos/*)
+: flake dir with nixos configuration (default: */etc/nixos/*). When *DIR* is
+  inside a Git repository, Nix uses files indexed by Git; add new files to the
+  index before upgrading.
 
 `-u, --no-update-lock-file`
 : do not update flake.lock

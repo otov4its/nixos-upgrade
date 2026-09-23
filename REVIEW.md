@@ -200,10 +200,21 @@ If privilege separation is to be kept, the minimum hardening is:
 * a `CANCEL` message the worker polls while long commands run in the
   background, so Ctrl‑C can reach `nix build`.
 
-### B.2 Stop copying the flake directory
+### B.2 Stop copying the flake directory, but choose source semantics explicitly
 
 Nix 2.34 provides `--output-lock-file`, `--reference-lock-file` and
-`--no-write-lock-file` (confirmed present in the installed `libnixcmd`):
+`--no-write-lock-file` (confirmed present in the installed `libnixcmd`). These
+options control **which lock file is read or written**; they do not decide
+whether the flake source is obtained through Git or directly from the
+filesystem. That decision comes from the flake reference:
+
+| Reference | Source files visible to Nix |
+|-----------|-----------------------------|
+| `/etc/nixos` (a raw path inside a Git repository) | Git-indexed files only. Modified tracked files are read from the current working tree, but merely untracked or `.gitignore`d files are not available. A new file becomes visible after it is added to the Git index (for example with `git add` or `git add --intent-to-add`). |
+| `path:/etc/nixos` (an explicit `path:` reference) | The filesystem tree, including untracked and ignored files, subject to Nix's normal source filtering. |
+| The current `$TMP_DIR` after copying the directory and removing its `.git` entry | A non-Git path tree, so it currently has the same broad "filesystem tree" behaviour as the explicit `path:` case. |
+
+Therefore, the following example from the original review:
 
 ```bash
 nix flake update --flake /etc/nixos --output-lock-file "$TMP/flake.lock"
@@ -211,15 +222,61 @@ nix build /etc/nixos#nixosConfigurations.$HOST.config.system.build.toplevel \
     --reference-lock-file "$TMP/flake.lock" --no-write-lock-file
 ```
 
-Removes `cp --reflink`, the `.git` deletion (A.1) and most of the temp-dir
-lifecycle; the real `flake.lock` is still only replaced after a successful
-switch.
+**would use Git-indexed-file semantics**, because `/etc/nixos` is implicitly
+resolved as a `git+file:` flake when it is inside a Git repository. Your
+intuition is correct for modified tracked files: those changes are visible.
+The important exception is a new file that has not been added to Git, or a
+file excluded by `.gitignore`; Nix will not copy those into the source tree
+used for evaluation. This is the same distinction that commonly affects
+`nixos-rebuild --flake`.
 
-Trade-off to decide consciously: this uses git-fetcher semantics (tracked
-files only, identical to `nixos-rebuild`) instead of "everything in the
-directory". If the current behaviour is intentional, keep the copy but
-delete only `$TMP_DIR/.git`, or copy via `rsync --exclude=.git` /
-`git ls-files`.
+The implementation in this branch selects the opposite, reproducible
+policy: use the raw flake path and intentionally require new files to be
+indexed by Git. The `nixos-upgrade` worker now passes the original
+`$FLAKE_DIR` to Nix and uses a temporary lock file only to avoid modifying the
+real lock during evaluation/build. The explicit `path:` alternative below is
+still documented for comparison, but is not the selected behaviour.
+
+If the intended behaviour were instead the old one — build the complete
+directory including new local files — use an explicit path reference:
+
+```bash
+flake_ref="path:$FLAKE_DIR"
+nix flake update --flake "$flake_ref" \
+    --output-lock-file "$TMP/flake.lock"
+nix build "$flake_ref#nixosConfigurations.$HOST.config.system.build.toplevel" \
+    --reference-lock-file "$TMP/flake.lock" \
+    --no-write-lock-file
+```
+
+This avoids the dangerous `git rev-parse --absolute-git-dir` deletion and
+lets Nix create its normal store snapshot, but it has two trade-offs:
+
+* The update and build are separate commands and can observe different
+  filesystem contents if the flake changes between them. The current copy
+  gives both operations one initial snapshot.
+* Untracked and ignored files can be included, which preserves current
+  behaviour but may copy large build artifacts or sensitive files into the
+  Nix store. This should be intentional.
+
+If a stable snapshot is more important than eliminating the copy, keep the
+copy but remove only the copied metadata entry:
+
+```bash
+cp -R --no-dereference "$FLAKE_DIR/." "$TMP_DIR/"
+rm -rf -- "$TMP_DIR/.git"
+```
+
+That fixes A.1 without changing the current all-files source semantics. A
+more ambitious implementation could snapshot the source once and then use
+that snapshot for both commands.
+
+Finally, `--output-lock-file` means the update command does not modify the
+real `flake.lock`, and the other two options prevent the build from writing
+it. The application still decides when to install `$TMP/flake.lock`. In the
+current code, `privileged-worker:180-182` copies the temporary lock file
+**before** `switch-to-configuration` runs, not after a successful switch; if
+that ordering matters, move the copy after the switch or add rollback logic.
 
 ### B.3 Drop the `nix flake show` pre-check
 
@@ -344,7 +401,7 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
 
 1. **Safety fixes on this branch** (small, low risk, independent of the
    architecture decision):
-   - [ ] A.1 delete only `$TMP_DIR/.git`
+   - [x] A.1 avoided by using the original Git worktree (Choice 3)
    - [ ] A.6 `-y`/`-n` mutually exclusive
    - [ ] A.6 `has_pkgs_changes` via `count_changes`
    - [ ] A.6 `logging.raiseExceptions`
@@ -354,9 +411,10 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    - [ ] A.8 fixed lock path
    - [ ] B.8 `--replace-fail`, `systems` linux-only, `overrideAttrs` attrset
          form, statix/deadnix cleanups
-2. **Decide the architecture direction** — B.1 (root controller,
-   recommended) vs. hardened IPC — since B.2, B.3 and B.4 are shaped by
-   that choice.
-3. **Tests first** (B.7), especially the VM test, so the refactor has a
+2. **B.2 source semantics** — Choice 3 is selected and implemented; new
+   files must be indexed by Git before Nix can use them.
+3. **Decide the remaining architecture direction** — B.1 (root controller,
+   recommended) vs. hardened IPC — since B.3–B.6 are shaped by that choice.
+4. **Tests first** (B.7), especially the VM test, so the refactor has a
    safety net.
-4. **Refactor** per B.1–B.6, then B.9 features.
+5. **Refactor** per B.1–B.6, then B.9 features.
