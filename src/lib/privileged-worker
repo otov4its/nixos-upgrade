@@ -193,6 +193,7 @@ function parse_cmd {
       local git=(git -C "$FLAKE_DIR")
       local git_dir
       local repo_owner
+      local repo_home="$HOME"
 
       # Only if the flake is a git repo
       if
@@ -204,15 +205,27 @@ function parse_cmd {
         then
           git_dir="$(get_git_dir_path "$FLAKE_DIR")"
           repo_owner="$(stat --format="%U" "$git_dir")"
+          repo_home="$(getent passwd "$repo_owner" | cut -d: -f6)"
+
+          if [[ -z "$repo_home" ]]; then
+            writeline_to_py "ERR_REPO_HOME"
+            return
+          fi
 
           as_owner=(runuser -u "$repo_owner" --)
-        fi      
-        
-        GIT_COMMITTER_NAME="$NAME" GIT_COMMITTER_EMAIL="<>" \
-        "${as_owner[@]}" "${git[@]}" commit \
-        --allow-empty --all --file=- <&"$COMMIT_MSG_R_FD"
+        fi
 
-        send_result
+        if
+          HOME="$repo_home" "${as_owner[@]}" "${git[@]}" diff --quiet &&
+          HOME="$repo_home" "${as_owner[@]}" "${git[@]}" diff --cached --quiet
+        then
+          writeline_to_py "NO_CHANGES"
+        else
+          # --no-commit is the opt-out for committing tracked WIP.
+          HOME="$repo_home" "${as_owner[@]}" "${git[@]}" commit \
+            --all --file=- <&"$COMMIT_MSG_R_FD"
+          send_result
+        fi
 
       else
         writeline_to_py "NOT_GIT"

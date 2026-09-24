@@ -641,6 +641,11 @@ class CliProgram:
 
                 if commit == "OK":
                     self.logger.warning("flake repo committed")
+                elif commit == "NO_CHANGES":
+                    self.logger.info("no tracked changes to commit")
+                elif commit == "ERR_REPO_HOME":
+                    self.logger.error(
+                        "could not determine the repository owner's home directory")
                 else:
                     self.logger.error("flake repo committing subprocess error")
 

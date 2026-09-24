@@ -52,6 +52,7 @@ rec {
       nix
       man
       coreutils
+      glibc.bin
       util-linux
     ];
 
