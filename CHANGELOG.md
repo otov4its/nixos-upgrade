@@ -8,6 +8,7 @@
 * Classify package changes using NVD status markers instead of arbitrary
   bracketed text.
 * Configure logging exception handling through `logging.raiseExceptions`.
+* Represent signal preservation policies as typed callable functions.
 
 ## 2026-07-01-1.0.5
 

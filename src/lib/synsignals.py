@@ -1,5 +1,5 @@
 import signal
-import enum
+from typing import Callable
 import contextlib
 
 
@@ -19,39 +19,39 @@ class BlockedHandling(contextlib.AbstractContextManager):
         return None
 
 
-class PreserveHandler(enum.Enum):
-    def _preserve_if_not_dfl(signum):
-        # Non-default signal handlers can be established in various cases
-        # (e.g. `nohup`, `env --ignore-signal=INT` commands).
-        # It's usually done intentionally, so they should be preserved.
-        match signum:
-            # Python by default sets SIGINT handler
-            # to `signal.default_int_handler`
-            case signal.SIGINT:
-                preserve = (signal.getsignal(signum) !=
-                            signal.default_int_handler)
-            # Python by default sets SIGPIPE handler
-            # to `signal.SIG_IGN`
-            case signal.SIGPIPE:
-                preserve = signal.getsignal(signum) != signal.SIG_IGN
-            # Other cases as usual.
-            case _:
-                preserve = signal.getsignal(signum) != signal.SIG_DFL
-
-        return preserve
-
-    def _preserve_always(signum):
-        return True
-
-    def _preserve_never(signum):
-        return False
-
-    AUTO = _preserve_if_not_dfl
-    ALWAYS = _preserve_always
-    NEVER = _preserve_never
+PreserveHandler = Callable[[int], bool]
 
 
-def set(signals: dict, *, preserve_handler=PreserveHandler.AUTO):
+def preserve_if_not_dfl(signum: int) -> bool:
+    # Non-default signal handlers can be established in various cases
+    # (e.g. `nohup`, `env --ignore-signal=INT` commands).
+    # It's usually done intentionally, so they should be preserved.
+    match signum:
+        # Python by default sets SIGINT handler
+        # to `signal.default_int_handler`
+        case signal.SIGINT:
+            preserve = (signal.getsignal(signum) !=
+                        signal.default_int_handler)
+        # Python by default sets SIGPIPE handler
+        # to `signal.SIG_IGN`
+        case signal.SIGPIPE:
+            preserve = signal.getsignal(signum) != signal.SIG_IGN
+        # Other cases as usual.
+        case _:
+            preserve = signal.getsignal(signum) != signal.SIG_DFL
+
+    return preserve
+
+
+def preserve_always(signum: int) -> bool:
+    return True
+
+
+def preserve_never(signum: int) -> bool:
+    return False
+
+
+def set(signals: dict, *, preserve_handler: PreserveHandler = preserve_if_not_dfl):
     global _signals, _signums
 
     if not signals:
