@@ -404,7 +404,7 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    - [x] A.1 avoided by using the original Git worktree (Choice 3)
    - [x] A.6 `-y`/`-n` mutually exclusive
    - [x] A.6 `has_pkgs_changes` via `count_changes`
-   - [ ] A.6 `logging.raiseExceptions`
+   - [x] A.6 `logging.raiseExceptions`
    - [ ] A.6 `PreserveHandler` → plain functions
    - [ ] A.6 trim signal list
    - [ ] A.7 committer email

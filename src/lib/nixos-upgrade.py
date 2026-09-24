@@ -337,9 +337,9 @@ class CliProgram:
         return colorformatter.ColorFormatter.COLOR_FORMAT
 
     def get_logger(self) -> logging.Logger:
-        this_module = sys.modules[__name__]
+        # Handler.handleError() resolves raiseExceptions in the logging module.
         # https://docs.python.org/3/howto/logging.html#exceptions-raised-during-logging
-        this_module.raiseExceptions = True if __debug__ else False
+        logging.raiseExceptions = __debug__
 
         stderr_handler = logging.StreamHandler()
         stderr_handler.setFormatter(self.get_formatter())

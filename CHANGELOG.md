@@ -7,6 +7,7 @@
 * Reject conflicting `--assume-yes` and `--assume-no` options.
 * Classify package changes using NVD status markers instead of arbitrary
   bracketed text.
+* Configure logging exception handling through `logging.raiseExceptions`.
 
 ## 2026-07-01-1.0.5
 
