@@ -406,7 +406,7 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    - [x] A.6 `has_pkgs_changes` via `count_changes`
    - [x] A.6 `logging.raiseExceptions`
    - [x] A.6 `PreserveHandler` → plain functions
-   - [ ] A.6 trim signal list
+   - [x] A.6 trim signal list
    - [ ] A.7 committer email
    - [ ] A.8 fixed lock path
    - [ ] B.8 `--replace-fail`, `systems` linux-only, `overrideAttrs` attrset

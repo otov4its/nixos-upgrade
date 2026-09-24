@@ -9,6 +9,7 @@
   bracketed text.
 * Configure logging exception handling through `logging.raiseExceptions`.
 * Represent signal preservation policies as typed callable functions.
+* Limit deferred signal handling to the application's supported termination signals.
 
 ## 2026-07-01-1.0.5
 

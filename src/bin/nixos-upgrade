@@ -22,9 +22,7 @@ readonly DROP_PRIV=(setpriv --reuid nobody --regid nobody
 
 function get_term_core_default_action_sigs {
   local sigs=(
-    SIGHUP SIGINT SIGQUIT SIGILL SIGTRAP SIGABRT SIGBUS SIGFPE SIGUSR1 SIGSEGV
-    SIGUSR2 SIGPIPE SIGALRM SIGTERM SIGSTKFLT SIGXCPU SIGXFSZ SIGVTALRM SIGPROF
-    SIGIO SIGPWR SIGSYS
+    SIGHUP SIGINT SIGQUIT SIGUSR1 SIGUSR2 SIGTERM SIGPIPE SIGXCPU SIGXFSZ SIGALRM
   )
 
   local signums=()
@@ -32,11 +30,6 @@ function get_term_core_default_action_sigs {
   for s in "${sigs[@]}"
   do
     signums+=("$(kill -l "$s")")
-  done
-
-  # Real-time signals
-  for ((s=$(kill -l SIGRTMIN); s<=$(kill -l SIGRTMAX); s++)); do
-    signums+=("$s")
   done
 
   printf "%s" "${signums[*]}"
