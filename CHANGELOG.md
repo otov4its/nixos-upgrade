@@ -11,6 +11,7 @@
 * Represent signal preservation policies as typed callable functions.
 * Limit deferred signal handling to the application's supported termination signals.
 * Use the repository owner's Git identity for auto-commits and avoid empty commits.
+* Use a per-user runtime lock independent of the Nix store worker path.
 
 ## 2026-07-01-1.0.5
 

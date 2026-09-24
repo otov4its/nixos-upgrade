@@ -106,9 +106,21 @@ function parse_options {
 }
 
 function check_singleton {
-  exec {LOCK_FD}<"$WORKER"
+  local lock_file="${XDG_RUNTIME_DIR:-}"
 
-  if ! flock --nonblock $LOCK_FD; then
+  if [[ -z "$lock_file" ]]; then
+    log_error "XDG_RUNTIME_DIR is not set"
+    exit 1
+  fi
+
+  lock_file="$lock_file/nixos-upgrade.lock"
+
+  if ! exec {LOCK_FD}>>"$lock_file"; then
+    log_error "unable to open singleton lock '$lock_file'"
+    exit 1
+  fi
+
+  if ! flock --nonblock "$LOCK_FD"; then
     log_error "process is already running"
     exit 1
   fi

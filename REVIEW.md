@@ -408,7 +408,7 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    - [x] A.6 `PreserveHandler` → plain functions
    - [x] A.6 trim signal list
    - [x] A.7 committer email
-   - [ ] A.8 fixed lock path
+   - [x] A.8 fixed lock path
    - [ ] B.8 `--replace-fail`, `systems` linux-only, `overrideAttrs` attrset
          form, statix/deadnix cleanups
 2. **B.2 source semantics** — Choice 3 is selected and implemented; new
