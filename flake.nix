@@ -87,7 +87,10 @@ rec {
   {
     packages = rec {
       default = pkgs.nixos-upgrade;
-      dev = pkgs.callPackage ./package.nix { pyOpts = "-B -s"; };
+      dev = pkgs.callPackage ./package.nix {
+        pyOpts = "-B -s";
+        compilePythonBytecode = false;
+      };
       ${name} = default;
     };
 

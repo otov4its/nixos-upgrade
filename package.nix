@@ -1,6 +1,7 @@
 { lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, man, coreutils,
   glibc, util-linux, shellcheck,
-  pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never" }:
+  pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never",
+  compilePythonBytecode ? true }:
 
 let
   name = "nixos-upgrade";
@@ -72,7 +73,9 @@ stdenvNoCC.mkDerivation rec {
   buildPhase = ''
     runHook preBuild
 
-    python -m compileall -f -o 2 --invalidation-mode unchecked-hash ./lib
+    ${lib.optionalString compilePythonBytecode ''
+      python -m compileall -f -o 2 --invalidation-mode unchecked-hash ./lib
+    ''}
 
     # Man page
     pandoc ./${manPageMd} --standalone --to=man --output=./${manPage}
