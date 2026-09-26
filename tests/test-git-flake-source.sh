@@ -37,6 +37,10 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
+test "$1" = "--extra-experimental-features"
+test "$2" = "nix-command flakes"
+shift 2
+
 if [[ "$1" == "flake" && "$2" == "show" ]]; then
   test "$3" = "--no-write-lock-file"
   touch "$4/.worker-show"

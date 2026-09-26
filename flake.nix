@@ -179,6 +179,10 @@ rec {
             == "Whether to enable nixos-upgrade.";
           assert hostSystem.options.programs.nixos-upgrade.package.description
             == "The nixos-upgrade package to use. Set to null to skip installing the package.";
+          assert !(builtins.elem "nix-command"
+            (hostSystem.config.nix.settings.experimental-features or []));
+          assert !(builtins.elem "flakes"
+            (hostSystem.config.nix.settings.experimental-features or []));
           assert hostSystem.config.programs.nixos-upgrade.package.drvPath
             == hostSystem.pkgs.nixos-upgrade.drvPath;
           assert (containsDrv hostSystem.pkgs.nixos-upgrade.drvPath
@@ -220,7 +224,6 @@ rec {
 
         config = lib.mkIf cfg.enable {
           nixpkgs.overlays = [ self.overlays.default ];
-          nix.settings.experimental-features = ["nix-command" "flakes"];
 
           environment.systemPackages = (
             lib.optional (cfg.package != null) cfg.package);

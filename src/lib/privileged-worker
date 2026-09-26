@@ -10,6 +10,7 @@ readonly EXIT=EXIT
 
 readonly LOCK_FILE_NAME=flake.lock
 readonly FLAKE_ROOT=flake.nix
+readonly -a NIX_CMD=(nix --extra-experimental-features "nix-command flakes")
 readonly CURRENT_SYSTEM=/run/current-system
 readonly SYSTEM_PROFILE=/nix/var/nix/profiles/system
 
@@ -121,14 +122,14 @@ function parse_cmd {
     "check_nixos_config")
       local out
     
-      out=$(nix flake show --no-write-lock-file "$FLAKE_DIR")
+      out=$("${NIX_CMD[@]}" flake show --no-write-lock-file "$FLAKE_DIR")
 
       [[ "$out" = *"nixosConfigurations"* ]]
       send_result
     ;;
 
     "update_lock_file")
-      nix flake update \
+      "${NIX_CMD[@]}" flake update \
         --flake "$FLAKE_DIR" \
         --output-lock-file "$TMP_LOCK_FILE"
       send_result
@@ -145,7 +146,7 @@ function parse_cmd {
       fi
       
       if 
-        nix build --out-link "$out_link" "${lock_args[@]}" "$config"
+        "${NIX_CMD[@]}" build --out-link "$out_link" "${lock_args[@]}" "$config"
       then
         closure=$(readlink --canonicalize-existing --no-newline "$out_link")
 
