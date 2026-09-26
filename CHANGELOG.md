@@ -12,6 +12,16 @@
 * Limit deferred signal handling to the application's supported termination signals.
 * Use the repository owner's Git identity for auto-commits and avoid empty commits.
 * Use a per-user runtime lock independent of the Nix store worker path.
+* Add a reusable Nixpkgs overlay and standalone package expression; the NixOS
+  module defaults to the host package and supports explicit package selection
+  or opting out with `null`.
+* Keep NixOS `nix.settings.experimental-features` unchanged; the tool requests
+  `nix-command` and `flakes` only on its own Nix invocations.
+* Limit flake package, dev-shell, and check outputs to Linux systems.
+* Make package builds fail if an expected source placeholder is missing.
+* Skip Python bytecode compilation in the development package while retaining
+  optimized bytecode in the default package.
+* Run `statix` and `deadnix` in the flake's checks.
 
 ## 2026-07-01-1.0.5
 
