@@ -42,25 +42,24 @@
 
 - [ ] **Step 1: Add a failing overlay-output check**
 
-Add a top-level `checks` output to `flake.nix` before defining the overlay. Keep this as a separate `checks = eachSystem ...` output combined with the existing system outputs using `//`; do not place it inside the existing `eachSystem` function, which would create a nested system attribute. The Linux-only check applies the exported overlay to a clean import of the pinned Nixpkgs and asserts that its package matches the standalone default:
+Add the `checks` field to the attrset returned by the existing `eachSystem` function, alongside `packages` and `devShells`. The helper transposes every callback field under its system name, so this placement produces the standard `checks.<system>.<name>` shape; do not wrap another `eachSystem` around this field. Initially add this Linux-only overlay check before defining the overlay:
 
 ```nix
-checks = eachSystem (system:
-  if system == "x86_64-linux" then
-    let
-      basePkgs = import nixpkgs { inherit system; };
-      overlayPkgs = basePkgs.extend self.overlays.default;
-    in {
-      package-overlay =
-        assert overlayPkgs.nixos-upgrade.drvPath
-          == self.packages.${system}.default.drvPath;
-        basePkgs.runCommand "nixos-upgrade-overlay-check" { }
-          "touch $out";
-    }
-  else { });
+checks = if system == "x86_64-linux" then
+  let
+    basePkgs = import nixpkgs { inherit system; };
+    overlayPkgs = basePkgs.extend self.overlays.default;
+  in {
+    package-overlay =
+      assert overlayPkgs.nixos-upgrade.drvPath
+        == self.packages.${system}.default.drvPath;
+      basePkgs.runCommand "nixos-upgrade-overlay-check" { }
+        "touch $out";
+  }
+else { };
 ```
 
-Place this as a top-level flake output alongside the existing `packages`, `devShells`, and `nixosModules` outputs. Do not add the check under the NixOS module output.
+The resulting flake output is top-level `checks.x86_64-linux.package-overlay`, alongside `packages` and `devShells`. Do not add the check under the NixOS module output.
 
 - [ ] **Step 2: Run the check and confirm the expected failure**
 
@@ -119,7 +118,7 @@ git commit -m "nixos-upgrade: expose reusable package overlay"
 
 - [ ] **Step 1: Add NixOS module evaluation checks before changing the module**
 
-Add the following helper and NixOS evaluations to the existing `let` block in the `x86_64-linux` branch of the `checks = eachSystem ...` output from Task 1, after `basePkgs` and `overlayPkgs` but before `in`. Reuse its unextended `basePkgs` binding, and retain the existing `package-overlay` check in the returned attrset:
+Add the following helper and NixOS evaluations to the `let` block for `checks = if system == "x86_64-linux" then ...`, inside the existing `eachSystem` callback from Task 1. Place them after `basePkgs` and `overlayPkgs` but before `in`. Reuse its unextended `basePkgs` binding, and retain the existing `package-overlay` check in the returned attrset:
 
 ```nix
 containsDrv = drvPath: packages:

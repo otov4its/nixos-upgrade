@@ -9,19 +9,6 @@ rec {
   let
     name = "nixos-upgrade";
 
-    dateVer = "2026-07-01";
-    semVer = "1.0.5";
-    packageVersion = "${dateVer}-${semVer}";
-
-    packageSrc = ./src;
-
-    binSrc = "./bin/${name}";
-    outBin = "$out/${binSrc}";
-    outLibDir = "$out/lib";
-    manPage = "./share/man/man8/${name}.8";
-    manPageMd = "${manPage}.md";
-    manPageGz = "${manPage}.gz";
-
     # Systems supported
     systems = [
       "x86_64-linux"   # 64-bit Intel/AMD Linux
@@ -34,9 +21,16 @@ rec {
       f: foldAttrs mergeAttrs { }
         (map (s: mapAttrs (_: v: { ${s} = v; }) (f s)) systems)
     );
+
+    nixosUpgradeOverlay = final: _prev: {
+      nixos-upgrade = final.callPackage ./package.nix { };
+    };
   in eachSystem (system:
   let
-    pkgs = import nixpkgs { inherit system; };
+    pkgs = import nixpkgs {
+      inherit system;
+      overlays = [ nixosUpgradeOverlay ];
+    };
 
     python = pkgs.python3;
     pythonWithPkgs = python.withPackages (ps: with ps; [
@@ -91,87 +85,11 @@ rec {
       bubblewrap
     ] ++ pyFlakes ++ runtimeInputs;
 
-    pyOptsDev = "-B -s";
-    pyOptsProd = "-B -s -OO -E -Wignore --check-hash-based-pycs never";
   in
   {
     packages = rec {
-      default = pkgs.stdenvNoCC.mkDerivation rec {
-        pname = name;
-        version = packageVersion;
-        src = packageSrc;
-
-        nativeBuildInputs = [
-          pkgs.python3
-          pkgs.pandoc
-        ];
-
-        preBuild = ''
-          substituteInPlace ./${manPageMd} \
-            --replace "@name@" "${name}" \
-            --replace "@version@" "${version}" \
-            --replace "@description@" "${description}" \
-
-          substituteInPlace ${binSrc} \
-            --replace "@man@" "$out/${manPageGz}" \
-            --replace "@version@" "${version}" \
-            --replace "@name@" "${name}" \
-            --replace "@path@" "${pkgs.lib.makeBinPath runtimeInputs}" \
-            --replace "@worker@" "${outLibDir}/privileged-worker" \
-            --replace "@pyfile@" "${outLibDir}/${name}.py" \
-        '';
-
-        postBuild = ''
-          substituteInPlace ${binSrc} \
-            --replace "@py_opts@" "${pyOptsProd}"
-        '';
-
-        buildPhase = ''
-          runHook preBuild
-
-          python -m compileall -f -o 2 --invalidation-mode unchecked-hash ./lib
-
-          # Man page
-          pandoc ./${manPageMd} --standalone --to=man --output=./${manPage}
-          gzip ./${manPage}
-          rm ./${manPageMd}
-
-          runHook postBuild
-        '';
-
-        buildInputs = runtimeInputs;
-        installPhase = ''
-          runHook preInstall
-
-          cp -R . $out
-
-          runHook postInstall
-        '';
-
-        doInstallCheck = true;
-        nativeInstallCheckInputs = [ pkgs.shellcheck ] ++ pyFlakes;
-        installCheckPhase = ''
-          runHook preCheck
-
-          ${pkgs.stdenv.shellDryRun} ${outBin}
-          shellcheck ${outBin}
-
-          ${pkgs.stdenv.shellDryRun} "${outLibDir}/privileged-worker"
-          shellcheck ${outLibDir}/privileged-worker
-
-          pyflakes ${outLibDir}
-
-          runHook postCheck
-        '';
-      };
-
-      dev = default.overrideAttrs (finalAttrs: prevAttrs: {
-        postBuild = ''
-          substituteInPlace ${binSrc} \
-            --replace "@py_opts@" "${pyOptsDev}"
-        '';
-      });
-
+      default = pkgs.nixos-upgrade;
+      dev = pkgs.callPackage ./package.nix { pyOpts = "-B -s"; };
       ${name} = default;
     };
 
@@ -191,7 +109,22 @@ rec {
         # '';
       };
     };
+
+    checks = if system == "x86_64-linux" then
+      let
+        basePkgs = import nixpkgs { inherit system; };
+        overlayPkgs = basePkgs.extend self.overlays.default;
+      in {
+        package-overlay =
+          assert overlayPkgs.nixos-upgrade.drvPath
+            == self.packages.${system}.default.drvPath;
+          basePkgs.runCommand "nixos-upgrade-overlay-check" { }
+            "touch $out";
+      }
+    else { };
   }) // rec {
+    overlays.default = nixosUpgradeOverlay;
+
     nixosModules.${name} = (
       { config, lib, pkgs, ... }:
       let
