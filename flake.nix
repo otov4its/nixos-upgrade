@@ -175,6 +175,10 @@ rec {
             "touch $out";
 
         nixos-module-package-selection =
+          assert hostSystem.options.programs.nixos-upgrade.enable.description
+            == "Whether to enable nixos-upgrade.";
+          assert hostSystem.options.programs.nixos-upgrade.package.description
+            == "The nixos-upgrade package to use. Set to null to skip installing the package.";
           assert hostSystem.config.programs.nixos-upgrade.package.drvPath
             == hostSystem.pkgs.nixos-upgrade.drvPath;
           assert (containsDrv hostSystem.pkgs.nixos-upgrade.drvPath
@@ -205,16 +209,11 @@ rec {
       in {
         options = {
           programs.${name} = {
-            enable = lib.mkOption {
-              type = lib.types.bool;
-              default = false;
-              description = "${name} program";
-            };
+            enable = lib.mkEnableOption name;
 
-            package = lib.mkOption {
-              type = lib.types.nullOr lib.types.package;
-              default = pkgs.nixos-upgrade;
-              description = "package to use";
+            package = lib.mkPackageOption pkgs name {
+              nullable = true;
+              extraDescription = "Set to null to skip installing the package.";
             };
           };
         };
