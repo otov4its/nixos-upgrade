@@ -48,7 +48,7 @@ rec {
       util-linux
     ];
 
-    pyFlakes = [
+    pythonDevTools = [
       pythonPackages.pyflakes
       pythonPackages.rope
       pythonPackages.yapf
@@ -81,7 +81,7 @@ rec {
 
       # Sandboxing for agents
       bubblewrap
-    ] ++ pyFlakes ++ runtimeInputs;
+    ] ++ pythonDevTools ++ runtimeInputs;
 
   in
   {

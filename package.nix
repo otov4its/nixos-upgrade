@@ -31,7 +31,7 @@ let
     util-linux
   ];
 
-  pyFlakes = [
+  pythonDevTools = [
     pythonPackages.pyflakes
     pythonPackages.rope
     pythonPackages.yapf
@@ -91,7 +91,7 @@ stdenvNoCC.mkDerivation rec {
   '';
 
   doInstallCheck = true;
-  nativeInstallCheckInputs = [ shellcheck ] ++ pyFlakes;
+  nativeInstallCheckInputs = [ shellcheck ] ++ pythonDevTools;
   installCheckPhase = ''
     runHook preCheck
 
