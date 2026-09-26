@@ -114,11 +114,84 @@ rec {
       let
         basePkgs = import nixpkgs { inherit system; };
         overlayPkgs = basePkgs.extend self.overlays.default;
+        containsDrv = drvPath: packages:
+          builtins.any (package: package.drvPath == drvPath) packages;
+
+        hostSystem = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            { programs.nixos-upgrade.enable = true; }
+          ];
+        };
+
+        pinnedSystem = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            {
+              programs.nixos-upgrade.enable = true;
+              programs.nixos-upgrade.package = self.packages.${system}.default;
+            }
+          ];
+        };
+
+        nullPackageSystem = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            {
+              programs.nixos-upgrade.enable = true;
+              programs.nixos-upgrade.package = null;
+            }
+          ];
+        };
+
+        disabledSystem = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [ self.nixosModules.default ];
+        };
+
+        explicitPkgs = import nixpkgs {
+          inherit system;
+          overlays = [ self.overlays.default ];
+        };
+
+        preInstantiatedPkgsSystem = nixpkgs.lib.nixosSystem {
+          inherit system;
+          modules = [
+            self.nixosModules.default
+            {
+              nixpkgs.pkgs = explicitPkgs;
+              programs.nixos-upgrade.enable = true;
+            }
+          ];
+        };
       in {
         package-overlay =
           assert overlayPkgs.nixos-upgrade.drvPath
             == self.packages.${system}.default.drvPath;
           basePkgs.runCommand "nixos-upgrade-overlay-check" { }
+            "touch $out";
+
+        nixos-module-package-selection =
+          assert hostSystem.config.programs.nixos-upgrade.package.drvPath
+            == hostSystem.pkgs.nixos-upgrade.drvPath;
+          assert (containsDrv hostSystem.pkgs.nixos-upgrade.drvPath
+            hostSystem.config.environment.systemPackages);
+          assert pinnedSystem.config.programs.nixos-upgrade.package.drvPath
+            == self.packages.${system}.default.drvPath;
+          assert (containsDrv self.packages.${system}.default.drvPath
+            pinnedSystem.config.environment.systemPackages);
+          assert nullPackageSystem.config.programs.nixos-upgrade.package == null;
+          assert !(containsDrv nullPackageSystem.pkgs.nixos-upgrade.drvPath
+            nullPackageSystem.config.environment.systemPackages);
+          assert (disabledSystem.pkgs ? nixos-upgrade) == (basePkgs ? nixos-upgrade);
+          assert (!(basePkgs ? nixos-upgrade)
+            || disabledSystem.pkgs.nixos-upgrade.drvPath == basePkgs.nixos-upgrade.drvPath);
+          assert preInstantiatedPkgsSystem.config.programs.nixos-upgrade.package.drvPath
+            == explicitPkgs.nixos-upgrade.drvPath;
+          basePkgs.runCommand "nixos-upgrade-nixos-module-check" { }
             "touch $out";
       }
     else { };
@@ -129,7 +202,6 @@ rec {
       { config, lib, pkgs, ... }:
       let
         cfg = config.programs.${name};
-        system = pkgs.stdenv.hostPlatform.system;
       in {
         options = {
           programs.${name} = {
@@ -141,13 +213,14 @@ rec {
 
             package = lib.mkOption {
               type = lib.types.nullOr lib.types.package;
-              default = self.packages.${system}.default;
+              default = pkgs.nixos-upgrade;
               description = "package to use";
             };
           };
         };
 
         config = lib.mkIf cfg.enable {
+          nixpkgs.overlays = [ self.overlays.default ];
           nix.settings.experimental-features = ["nix-command" "flakes"];
 
           environment.systemPackages = (
