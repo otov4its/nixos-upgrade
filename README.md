@@ -26,7 +26,7 @@ $ nix shell github:otov4its/nixos-upgrade/stable
 $ nix profile install github:otov4its/nixos-upgrade/stable
 ```
 
-## NixOs flake.nix
+## NixOS flake.nix
 
 ```nix
 {
@@ -35,7 +35,8 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
         
         nixos-upgrade = {
           url = "github:otov4its/nixos-upgrade/stable";
-          # Optionally
+          # Optional: aligns standalone outputs with the host revision and can
+          # deduplicate the lock graph. Not required for the module's host package.
           inputs.nixpkgs.follows = "nixpkgs";
         }
     };
@@ -57,6 +58,22 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
         }
     }
 }
+```
+
+When enabled, the NixOS module adds `inputs.nixos-upgrade.overlays.default` to the host's package set and defaults `programs.nixos-upgrade.package` to `pkgs.nixos-upgrade`. This means the package uses dependencies from the host's Nixpkgs configuration. The host's `nix` executable must support the CLI options used by `nixos-upgrade`; if its version is incompatible, select the flake's pinned standalone package explicitly:
+
+```nix
+programs.nixos-upgrade.package =
+  inputs.nixos-upgrade.packages.${pkgs.stdenv.hostPlatform.system}.default;
+```
+
+If your configuration supplies an already-instantiated `nixpkgs.pkgs`, the module cannot apply its overlay to that package set retroactively. Apply the overlay while constructing `pkgs`:
+
+```nix
+nixpkgs.pkgs = import inputs.nixpkgs {
+  system = "x86_64-linux"; # Use your target system.
+  overlays = [ inputs.nixos-upgrade.overlays.default ];
+};
 ```
 
 # Developing
