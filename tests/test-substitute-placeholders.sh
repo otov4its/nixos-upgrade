@@ -35,4 +35,14 @@ do
   fi
 done
 
-printf 'ok: package placeholders use --replace-fail\n'
+if ! grep --fixed-strings --quiet -- "--replace-fail \"@path@\" \"\${lib.makeBinPath runtimeInputs}\"" "$PACKAGE_NIX"; then
+  printf 'runtime inputs must be embedded in the launcher PATH\n' >&2
+  exit 1
+fi
+
+if grep --fixed-strings --quiet -- 'buildInputs = runtimeInputs;' "$PACKAGE_NIX"; then
+  printf 'runtime inputs should not be added as build inputs\n' >&2
+  exit 1
+fi
+
+printf 'ok: package placeholders use --replace-fail and runtime inputs stay in launcher PATH\n'

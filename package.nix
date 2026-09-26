@@ -82,7 +82,6 @@ stdenvNoCC.mkDerivation rec {
     runHook postBuild
   '';
 
-  buildInputs = runtimeInputs;
   installPhase = ''
     runHook preInstall
 
