@@ -169,6 +169,15 @@ rec {
           ];
         };
       in {
+        nix-static-analysis = basePkgs.runCommand "nixos-upgrade-nix-static-analysis" {
+          nativeBuildInputs = [ basePkgs.statix basePkgs.deadnix ];
+        } ''
+          cd ${self.outPath}
+          statix check .
+          deadnix --fail .
+          touch $out
+        '';
+
         package-overlay =
           assert overlayPkgs.nixos-upgrade.drvPath
             == self.packages.${system}.default.drvPath;
@@ -215,7 +224,7 @@ rec {
   }) // rec {
     overlays.default = nixosUpgradeOverlay;
 
-    nixosModules.${name} = (
+    nixosModules.${name} =
       { config, lib, pkgs, ... }:
       let
         cfg = config.programs.${name};
@@ -234,11 +243,10 @@ rec {
         config = lib.mkIf cfg.enable {
           nixpkgs.overlays = [ self.overlays.default ];
 
-          environment.systemPackages = (
-            lib.optional (cfg.package != null) cfg.package);
+          environment.systemPackages =
+            lib.optional (cfg.package != null) cfg.package;
         };
-      }
-    );
+      };
 
     nixosModules.default = nixosModules.${name};
   };

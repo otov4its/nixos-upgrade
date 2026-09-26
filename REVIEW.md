@@ -409,8 +409,8 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    - [x] A.6 trim signal list
    - [x] A.7 committer email
    - [x] A.8 fixed lock path
-   - [ ] B.8 `--replace-fail`, `systems` linux-only, `overrideAttrs` attrset
-         form, statix/deadnix cleanups
+   - [x] B.8 `--replace-fail`, Linux-only systems, dev `callPackage` (no
+         `overrideAttrs` callback), statix/deadnix checks
 2. **B.2 source semantics** — Choice 3 is selected and implemented; new
    files must be indexed by Git before Nix can use them.
 3. **Decide the remaining architecture direction** — B.1 (root controller,
