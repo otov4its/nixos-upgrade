@@ -51,22 +51,22 @@ stdenvNoCC.mkDerivation rec {
 
   preBuild = ''
     substituteInPlace ./${manPageMd} \
-      --replace "@name@" "${name}" \
-      --replace "@version@" "${version}" \
-      --replace "@description@" "${description}"
+      --replace-fail "@name@" "${name}" \
+      --replace-fail "@version@" "${version}" \
+      --replace-fail "@description@" "${description}"
 
     substituteInPlace ${binSrc} \
-      --replace "@man@" "$out/${manPageGz}" \
-      --replace "@version@" "${version}" \
-      --replace "@name@" "${name}" \
-      --replace "@path@" "${lib.makeBinPath runtimeInputs}" \
-      --replace "@worker@" "${outLibDir}/privileged-worker" \
-      --replace "@pyfile@" "${outLibDir}/${name}.py"
+      --replace-fail "@man@" "$out/${manPageGz}" \
+      --replace-fail "@version@" "${version}" \
+      --replace-fail "@name@" "${name}" \
+      --replace-fail "@path@" "${lib.makeBinPath runtimeInputs}" \
+      --replace-fail "@worker@" "${outLibDir}/privileged-worker" \
+      --replace-fail "@pyfile@" "${outLibDir}/${name}.py"
   '';
 
   postBuild = ''
     substituteInPlace ${binSrc} \
-      --replace "@py_opts@" "${pyOpts}"
+      --replace-fail "@py_opts@" "${pyOpts}"
   '';
 
   buildPhase = ''
