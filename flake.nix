@@ -11,10 +11,8 @@ rec {
 
     # Systems supported
     systems = [
-      "x86_64-linux"   # 64-bit Intel/AMD Linux
-      "aarch64-linux"  # 64-bit ARM Linux
-      "x86_64-darwin"  # 64-bit Intel macOS
-      "aarch64-darwin" # 64-bit ARM macOS
+      "x86_64-linux"  # 64-bit Intel/AMD Linux
+      "aarch64-linux" # 64-bit ARM Linux
     ];
 
     eachSystem = with nixpkgs.lib; (
@@ -172,6 +170,14 @@ rec {
           assert overlayPkgs.nixos-upgrade.drvPath
             == self.packages.${system}.default.drvPath;
           basePkgs.runCommand "nixos-upgrade-overlay-check" { }
+            "touch $out";
+
+        linux-only-outputs =
+          assert !(self.packages ? x86_64-darwin);
+          assert !(self.packages ? aarch64-darwin);
+          assert !(self.devShells ? x86_64-darwin);
+          assert !(self.devShells ? aarch64-darwin);
+          basePkgs.runCommand "nixos-upgrade-linux-only-outputs-check" { }
             "touch $out";
 
         nixos-module-package-selection =
