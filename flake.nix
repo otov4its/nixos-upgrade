@@ -1,4 +1,4 @@
-rec {
+{
   description = "NixOS upgrade showing what will be changed";
 
   inputs = {
