@@ -1,0 +1,375 @@
+#!@bash@
+
+set -o errexit
+set -o nounset
+set -o pipefail
+
+PATH="@path@"
+export PATH
+umask 077
+
+readonly ACTIVATION_LOCK_DIR=/run/lock
+readonly ACTIVATION_LOCK_PATH="$ACTIVATION_LOCK_DIR/nixos-upgrade-activation.lock"
+readonly SYSTEM_PROFILE=/nix/var/nix/profiles/system
+readonly CURRENT_SYSTEM=/run/current-system
+
+function emit_result {
+  printf '{"system":"%s","lock":"%s","commit":"%s"}\n' "$1" "$2" "$3"
+}
+
+function invalid_request {
+  printf 'nixos-upgrade-activate: %s\n' "$1" >&2
+  emit_result invalid-request not-run not-run
+  exit 2
+}
+
+function activation_failed {
+  printf 'nixos-upgrade-activate: %s\n' "$1" >&2
+  emit_result "$2" not-run not-run
+  exit 1
+}
+
+function has_control_characters {
+  case "$1" in
+    *$'\n'*|*$'\r'*|*$'\t'*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+function is_store_path {
+  local path=$1
+  local store_relative=${path#/nix/store/}
+
+  [[ "$path" == /nix/store/* && -n "$store_relative" && "$store_relative" != */* ]]
+}
+
+function decode_base64 {
+  local encoded=$1
+  local output_file=$2
+  local round_trip
+
+  if ! printf '%s' "$encoded" | base64 --decode > "$output_file"; then
+    return 1
+  fi
+  if ! round_trip=$(base64 --wrap=0 "$output_file"); then
+    return 1
+  fi
+  [[ "$round_trip" == "$encoded" ]]
+}
+
+function acquire_activation_lock {
+  local lock_dir_owner
+  local lock_dir_mode
+  local lock_file_owner
+  local lock_file_links
+  local lock_file_mode
+  local temporary_lock_file
+  local path_identity
+  local descriptor_identity
+
+  [[ -d "$ACTIVATION_LOCK_DIR" && ! -L "$ACTIVATION_LOCK_DIR" ]] || return 1
+  lock_dir_owner=$(stat -c %u -- "$ACTIVATION_LOCK_DIR") || return 1
+  [[ "$lock_dir_owner" == 0 ]] || return 1
+
+  lock_dir_mode=$(stat -c %A -- "$ACTIVATION_LOCK_DIR") || return 1
+  if [[ "${lock_dir_mode:5:1}" == w || "${lock_dir_mode:8:1}" == w ]]; then
+    [[ "${lock_dir_mode:9:1}" == t || "${lock_dir_mode:9:1}" == T ]] || return 1
+  fi
+
+  temporary_lock_file=$(mktemp --tmpdir=/run nixos-upgrade-activation-lock.XXXXXXXXXX) || return 1
+  if ! ln -T -- "$temporary_lock_file" "$ACTIVATION_LOCK_PATH" 2>/dev/null; then
+    :
+  fi
+  rm -f -- "$temporary_lock_file" || return 1
+
+  [[ -f "$ACTIVATION_LOCK_PATH" && ! -L "$ACTIVATION_LOCK_PATH" ]] || return 1
+  lock_file_owner=$(stat -c %u -- "$ACTIVATION_LOCK_PATH") || return 1
+  [[ "$lock_file_owner" == 0 ]] || return 1
+  lock_file_links=$(stat -c %h -- "$ACTIVATION_LOCK_PATH") || return 1
+  [[ "$lock_file_links" == 1 ]] || return 1
+  lock_file_mode=$(stat -c %A -- "$ACTIVATION_LOCK_PATH") || return 1
+  [[ "${lock_file_mode:5:1}" != w && "${lock_file_mode:8:1}" != w ]] || return 1
+
+  exec {activation_lock_fd}>>"$ACTIVATION_LOCK_PATH" || return 1
+  path_identity=$(stat -Lc '%d:%i' -- "$ACTIVATION_LOCK_PATH") || return 1
+  descriptor_identity=$(stat -Lc '%d:%i' -- "/proc/$$/fd/$activation_lock_fd") || return 1
+  [[ "$path_identity" == "$descriptor_identity" ]] || return 1
+  flock "$activation_lock_fd"
+}
+
+function lookup_owner_account {
+  local uid=$1
+  local passwd_entry
+
+  passwd_entry=$(getent passwd "$uid") || return 1
+  owner_name=
+  owner_uid=
+  owner_home=
+  IFS=: read -r owner_name _ owner_uid _ _ owner_home _ <<< "$passwd_entry"
+  [[ -n "${owner_name:-}" && "$owner_uid" == "$uid" && -n "${owner_home:-}" ]]
+}
+
+function run_as_owner {
+  local uid=$1
+  local name=$2
+  local home=$3
+  shift 3
+
+  runuser --user "$uid" -- env -i \
+    "PATH=$PATH" "HOME=$home" "USER=$name" "LOGNAME=$name" "$@"
+}
+
+function publish_lock_file {
+  local flake_uid
+  local account_name
+  local account_home
+  local temporary_file
+
+  flake_uid=$(stat -c %u -- "$flake_dir") || return 1
+  if ! lookup_owner_account "$flake_uid"; then
+    return 1
+  fi
+  account_name=$owner_name
+  account_home=$owner_home
+
+  if ! temporary_file=$(run_as_owner "$flake_uid" "$account_name" "$account_home" \
+    mktemp --tmpdir="$flake_dir" .flake.lock.XXXXXXXXXX); then
+    return 1
+  fi
+  case "$temporary_file" in
+    "$flake_dir"/.flake.lock.*) ;;
+    *) return 1 ;;
+  esac
+
+  if ! run_as_owner "$flake_uid" "$account_name" "$account_home" \
+    tee -- "$temporary_file" < "$lock_contents_file" > /dev/null; then
+    run_as_owner "$flake_uid" "$account_name" "$account_home" rm -f -- "$temporary_file" || :
+    return 1
+  fi
+  if ! run_as_owner "$flake_uid" "$account_name" "$account_home" \
+    chmod 0644 -- "$temporary_file"; then
+    run_as_owner "$flake_uid" "$account_name" "$account_home" rm -f -- "$temporary_file" || :
+    return 1
+  fi
+  if ! run_as_owner "$flake_uid" "$account_name" "$account_home" \
+    mv -fT -- "$temporary_file" "$flake_dir/flake.lock"; then
+    run_as_owner "$flake_uid" "$account_name" "$account_home" rm -f -- "$temporary_file" || :
+    return 1
+  fi
+}
+
+function commit_repository {
+  local git_dir
+  local canonical_git_dir
+  local git_uid
+  local account_name
+  local account_home
+  local git_status
+  local -a git_args
+
+  if ! git_dir=$(env -i "PATH=$PATH" HOME=/root \
+    git -c "safe.directory=$flake_dir" -C "$flake_dir" rev-parse --absolute-git-dir 2>/dev/null); then
+    printf '%s' not-git
+    return 0
+  fi
+  if [[ "$git_dir" != /* ]] || ! canonical_git_dir=$(readlink -e -- "$git_dir"); then
+    printf '%s' failed
+    return 0
+  fi
+  if [[ "$canonical_git_dir" != "$git_dir" || ! -d "$canonical_git_dir" ]]; then
+    printf '%s' failed
+    return 0
+  fi
+
+  git_uid=$(stat -c %u -- "$canonical_git_dir") || {
+    printf '%s' failed
+    return 0
+  }
+  if ! lookup_owner_account "$git_uid"; then
+    printf '%s' failed
+    return 0
+  fi
+  account_name=$owner_name
+  account_home=$owner_home
+
+  if ! git_status=$(run_as_owner "$git_uid" "$account_name" "$account_home" \
+    git -c "safe.directory=$flake_dir" -C "$flake_dir" status --porcelain --untracked-files=no); then
+    printf '%s' failed
+    return 0
+  fi
+  if [[ -z "$git_status" ]]; then
+    printf '%s' no-changes
+    return 0
+  fi
+
+  git_args=(
+    -c "safe.directory=$flake_dir"
+    -C "$flake_dir"
+    commit
+    --all
+    --file=-
+  )
+  if run_as_owner "$git_uid" "$account_name" "$account_home" \
+    git "${git_args[@]}" < "$commit_message_file" >&2; then
+    printf '%s' committed
+  else
+    printf '%s' failed
+  fi
+}
+
+if [[ "$EUID" != 0 ]]; then
+  invalid_request 'must be run as root'
+fi
+
+if [[ "$#" -eq 0 || "$1" != activate ]]; then
+  invalid_request 'expected activate operation'
+fi
+shift
+
+expected_current=
+system_closure=
+flake_dir=
+no_commit=false
+seen_expected=false
+seen_closure=false
+seen_flake=false
+seen_no_commit=false
+
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --expected-current)
+      [[ "$seen_expected" == false && "$#" -ge 2 ]] || invalid_request 'invalid --expected-current argument'
+      expected_current=$2
+      seen_expected=true
+      shift 2
+      ;;
+    --system-closure)
+      [[ "$seen_closure" == false && "$#" -ge 2 ]] || invalid_request 'invalid --system-closure argument'
+      system_closure=$2
+      seen_closure=true
+      shift 2
+      ;;
+    --flake-dir)
+      [[ "$seen_flake" == false && "$#" -ge 2 ]] || invalid_request 'invalid --flake-dir argument'
+      flake_dir=$2
+      seen_flake=true
+      shift 2
+      ;;
+    --no-commit)
+      [[ "$seen_no_commit" == false ]] || invalid_request 'duplicate --no-commit option'
+      no_commit=true
+      seen_no_commit=true
+      shift
+      ;;
+    *)
+      invalid_request 'unexpected activation argument'
+      ;;
+  esac
+done
+
+[[ "$seen_expected" == true && "$seen_closure" == true && "$seen_flake" == true ]] || \
+  invalid_request 'missing required activation argument'
+for activation_path in "$expected_current" "$system_closure" "$flake_dir"; do
+  [[ -n "$activation_path" ]] || invalid_request 'empty activation path'
+  if has_control_characters "$activation_path"; then
+    invalid_request 'activation paths cannot contain control characters'
+  fi
+done
+is_store_path "$expected_current" || invalid_request 'expected current system is not a store path'
+is_store_path "$system_closure" || invalid_request 'system closure is not a store path'
+
+temporary_dir=$(mktemp -d --tmpdir=/run nixos-upgrade-activation.XXXXXXXXXX) || \
+  activation_failed 'could not create private runtime directory' profile-failed
+trap 'rm -rf -- "$temporary_dir"' EXIT
+readonly temporary_dir
+lock_contents_file="$temporary_dir/lock-file"
+commit_message_file="$temporary_dir/commit-message"
+
+if ! manifest=$(jq -c -s '
+  if length == 1
+    and (.[0] | type == "object")
+    and (.[0] | keys == ["commit_message_base64", "lock_file_base64"])
+    and (.[0].lock_file_base64 == null or (.[0].lock_file_base64 | type == "string"))
+    and (.[0].commit_message_base64 == null or (.[0].commit_message_base64 | type == "string"))
+  then .[0]
+  else error("invalid activation manifest")
+  end
+' 2>/dev/null); then
+  invalid_request 'malformed activation manifest'
+fi
+
+lock_requested=$(jq -r '.lock_file_base64 != null' <<< "$manifest")
+commit_requested=$(jq -r '.commit_message_base64 != null' <<< "$manifest")
+lock_contents=$(jq -r '.lock_file_base64 // ""' <<< "$manifest")
+commit_message=$(jq -r '.commit_message_base64 // ""' <<< "$manifest")
+
+if [[ "$no_commit" == true && "$commit_requested" != false ]]; then
+  invalid_request 'commit message must be null with --no-commit'
+fi
+if [[ "$no_commit" == false && "$commit_requested" != true ]]; then
+  invalid_request 'commit message is required unless --no-commit is set'
+fi
+
+if [[ "$lock_requested" == true ]] && ! decode_base64 "$lock_contents" "$lock_contents_file"; then
+  invalid_request 'lock-file content is not canonical base64'
+fi
+if [[ "$commit_requested" == true ]] && ! decode_base64 "$commit_message" "$commit_message_file"; then
+  invalid_request 'commit message is not canonical base64'
+fi
+
+canonical_system_closure=$(readlink -e -- "$system_closure") || \
+  invalid_request 'system closure does not exist'
+[[ "$canonical_system_closure" == "$system_closure" && -d "$system_closure" ]] || \
+  invalid_request 'system closure is not canonical'
+switch_program="$system_closure/bin/switch-to-configuration"
+[[ -f "$switch_program" && -x "$switch_program" ]] || \
+  invalid_request 'system closure has no executable switch-to-configuration'
+canonical_switch_program=$(readlink -e -- "$switch_program") || \
+  invalid_request 'switch-to-configuration cannot be resolved'
+[[ "$canonical_switch_program" == /nix/store/* ]] || \
+  invalid_request 'switch-to-configuration is outside the Nix store'
+
+[[ "$flake_dir" == /* ]] || invalid_request 'flake directory must be absolute'
+canonical_flake_dir=$(readlink -e -- "$flake_dir") || \
+  invalid_request 'flake directory does not exist'
+[[ "$canonical_flake_dir" == "$flake_dir" && -d "$flake_dir" && -f "$flake_dir/flake.nix" ]] || \
+  invalid_request 'flake directory must be canonical and contain flake.nix'
+
+if ! acquire_activation_lock; then
+  activation_failed 'could not safely acquire the activation lock' profile-failed
+fi
+
+if ! current_system=$(readlink -e -- "$CURRENT_SYSTEM"); then
+  printf 'nixos-upgrade-activate: cannot determine current system; refusing stale request\n' >&2
+  emit_result stale not-run not-run
+  exit 1
+fi
+if [[ "$current_system" != "$expected_current" ]]; then
+  printf 'nixos-upgrade-activate: current system changed since the build; refusing stale request\n' >&2
+  emit_result stale not-run not-run
+  exit 1
+fi
+
+if ! nix-env --profile "$SYSTEM_PROFILE" --set "$system_closure" >&2; then
+  activation_failed 'could not update the system profile' profile-failed
+fi
+if ! "$canonical_switch_program" switch >&2; then
+  activation_failed 'switch-to-configuration failed' switch-failed
+fi
+
+lock_status=not-requested
+if [[ "$lock_requested" == true ]]; then
+  if publish_lock_file; then
+    lock_status=published
+  else
+    printf 'nixos-upgrade-activate: system switched, but could not publish flake.lock\n' >&2
+    lock_status=failed
+  fi
+fi
+
+commit_status=not-requested
+if [[ "$no_commit" == false ]]; then
+  commit_status=$(commit_repository)
+fi
+
+emit_result switched "$lock_status" "$commit_status"

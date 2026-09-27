@@ -1,5 +1,5 @@
 { lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, man, coreutils,
-  glibc, util-linux, shellcheck,
+  glibc, getent, util-linux, jq, shellcheck,
   pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never",
   compilePythonBytecode ? true }:
 
@@ -29,7 +29,9 @@ let
     man
     coreutils
     glibc.bin
+    getent
     util-linux
+    jq
   ];
 
   pythonDevTools = [
@@ -61,8 +63,14 @@ stdenvNoCC.mkDerivation rec {
       --replace-fail "@version@" "${version}" \
       --replace-fail "@name@" "${name}" \
       --replace-fail "@path@" "${lib.makeBinPath runtimeInputs}" \
-      --replace-fail "@worker@" "${outLibDir}/privileged-worker" \
       --replace-fail "@pyfile@" "${outLibDir}/${name}.py"
+
+    substituteInPlace ./lib/activation.py \
+      --replace-fail "@helper@" "${outLibDir}/nixos-upgrade-activate"
+
+    substituteInPlace ./lib/nixos-upgrade-activate \
+      --replace-fail "@bash@" "${stdenv.shell}" \
+      --replace-fail "@path@" "${lib.makeBinPath runtimeInputs}"
   '';
 
   postBuild = ''
@@ -101,8 +109,9 @@ stdenvNoCC.mkDerivation rec {
     ${stdenv.shellDryRun} ${outBin}
     shellcheck ${outBin}
 
-    ${stdenv.shellDryRun} "${outLibDir}/privileged-worker"
-    shellcheck ${outLibDir}/privileged-worker
+
+    ${stdenv.shellDryRun} "${outLibDir}/nixos-upgrade-activate"
+    shellcheck --shell=bash ${outLibDir}/nixos-upgrade-activate
 
     pyflakes ${outLibDir}
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Run the controller and Nix preparation as the invoking user; request sudo
+  only after upgrade confirmation to run a fixed-purpose activation helper.
+  `--assume-yes` does not bypass sudo authorization.
 * Build directly from the Git worktree so Nix uses Git-indexed source files
   and no copied flake tree is created.
 * Reject conflicting `--assume-yes` and `--assume-no` options.

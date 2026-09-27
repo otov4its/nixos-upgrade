@@ -4,6 +4,18 @@
 
 NixOS upgrade showing what will be changed.
 
+# Running
+
+Run `nixos-upgrade` as your regular user, not with `sudo`. Flake updates,
+builds, diffs, and the confirmation run with your credentials. Only after you
+confirm the proposed upgrade does the application invoke its fixed-purpose
+helper through `sudo` to activate the system and, when requested, publish the
+lock file and commit repository changes.
+
+A password prompt depends on the host's sudo policy, which must authorize the
+helper. The package does not install sudoers rules. `--assume-yes` skips the
+upgrade confirmation only; it does not bypass sudo authorization.
+
 # Installation
 
 Use one or more of the following options:

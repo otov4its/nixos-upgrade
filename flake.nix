@@ -169,6 +169,16 @@ rec {
           ];
         };
       in {
+        python-unit-tests = basePkgs.runCommand "nixos-upgrade-python-unit-tests" {
+          nativeBuildInputs = [ basePkgs.python3 ];
+        } ''
+          cd ${self.outPath}
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
+          touch $out
+        '';
+
+        sudo-activation = basePkgs.callPackage ./tests/sudo-activation-vm.nix { };
+
         nix-static-analysis = basePkgs.runCommand "nixos-upgrade-nix-static-analysis" {
           nativeBuildInputs = [ basePkgs.statix basePkgs.deadnix ];
         } ''

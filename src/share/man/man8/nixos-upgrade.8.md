@@ -11,6 +11,17 @@ footer: "@name@ @version@"
 # SYNOPSIS
 `@name@` [OPTION]...
 
+# DESCRIPTION
+Run `@name@` as the invoking user, without `sudo`. Flake preparation, builds,
+diffs, and confirmation run with that user's credentials. Only after a
+positive confirmation does the program invoke its fixed-purpose activation
+helper through `sudo` to switch the system and perform requested lock-file or
+repository updates.
+
+Sudo authorization is controlled by the host and may prompt at activation
+time. The package does not install sudoers rules. `--assume-yes` skips the
+upgrade confirmation but does not bypass sudo authorization.
+
 # OPTIONS
 `-h, --help`
 : show this help message and exit

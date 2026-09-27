@@ -8,11 +8,7 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PROJECT_ROOT
 readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 
-NAME=nixos-upgrade-test \
-CMD_IFS=: \
-PY_SH_FD=3 \
-SH_PY_FD=4 \
-COMMIT_MSG_W_FD=5 \
+export NAME=nixos-upgrade-test
 python3 - "$PYTHON_FILE" <<'PY'
 import importlib.util
 import logging

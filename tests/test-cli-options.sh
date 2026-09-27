@@ -16,17 +16,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-exec 3<>/dev/null
-exec 4<>/dev/null
-exec 5<>/dev/null
 
 set +o errexit
 NAME=nixos-upgrade-test \
-CMD_IFS=: \
-PY_SH_FD=3 \
-SH_PY_FD=4 \
-COMMIT_MSG_W_FD=5 \
-TMP_DIR="$TEST_ROOT" \
 TERM_CORE_SIGS="" \
 python3 "$PYTHON_FILE" --color=never --assume-yes --assume-no \
   2>"$STDERR_FILE"

@@ -11,8 +11,10 @@ import pathlib
 import socket
 import enum
 import time
-import atexit
+import shutil
+import tempfile
 
+import activation
 import synsignals
 import colorformatter
 
@@ -43,14 +45,18 @@ class CliProgram:
     SIG_TO_KILL_SUBPROC = signal.SIGKILL
     TERM_SUBPROC_TIMEOUT = 5
     NO_COLOR_ENV_NAME = "NO_COLOR"
-    PY_SH_FD = int(os.environ["PY_SH_FD"])
-    SH_PY_FD = int(os.environ["SH_PY_FD"])
-    COMMIT_MSG_W_FD = int(os.environ["COMMIT_MSG_W_FD"])
-    IFS = os.environ["CMD_IFS"]
+    NIX_EXTRA_EXPERIMENTAL_FEATURES = [
+        "--extra-experimental-features",
+        "nix-command flakes",
+    ]
 
     def __init__(self):
-        self.from_worker_file = os.fdopen(self.SH_PY_FD, "r")
-        atexit.register(self.atexit_handler)
+        self.temporary_directory = tempfile.TemporaryDirectory(
+            prefix=f"{self.NAME}-"
+        )
+        self.temporary_path = pathlib.Path(self.temporary_directory.name)
+        self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
+        self.result_link = self.temporary_path / "result"
         self.running_subproc = None
         self._stdout = sys.stdout
         self.args = self.parse_args()
@@ -73,11 +79,6 @@ class CliProgram:
         self.setup_signals()
         self.setup_excepthook()
 
-    def atexit_handler(self):
-        # To avoid BrokenPipe ignored exception at exit
-        self.std_streams_to_devnull()
-        self.write_to_pipe(['exit'])
-        self.from_worker_file.close()
 
     def setup_excepthook(self):
         # Uncaught exceptions
@@ -86,9 +87,10 @@ class CliProgram:
     def setup_signals(self):
         signals = {}
 
-        for s in os.environ["TERM_CORE_SIGS"].split(" "):
+        for s in os.environ["TERM_CORE_SIGS"].split():
             signals[int(s)] = self.termination_signal_handler
 
+        self.supported_signals = tuple(signals)
         synsignals.set(signals)
 
         # Unblock all blocked signals
@@ -133,8 +135,9 @@ class CliProgram:
         self.exit(self.EXIT_ERR_CODE, f"{exc_value}", logging.CRITICAL)
 
     def get_current_system_closure(self):
-        current_system_closure = self.run_privileged_task(
-            "get_current_system_closure")
+        current_system_closure = str(
+            pathlib.Path("/run/current-system").resolve(strict=True)
+        )
 
         self.logger.debug(f"{current_system_closure=}")
         return current_system_closure
@@ -144,7 +147,7 @@ class CliProgram:
                 stderr_out=False, with_spinner=True, exit_on_error=True,
                 msg_on_success_loglevel=logging.INFO,
                 env_to_update: dict = {},
-                **kwargs):
+                **kwargs) -> subprocess.CompletedProcess[str]:
         stderr_out = self.debug_mode or stderr_out
 
         if desc:
@@ -224,7 +227,12 @@ class CliProgram:
                 self.logger.log(msg_on_success_loglevel, msg_on_success)
 
         self.logger.debug("> done")
-        return stdout_data
+        return subprocess.CompletedProcess(
+            args=cmd,
+            returncode=retcode,
+            stdout=stdout_data,
+            stderr=None,
+        )
 
     @staticmethod
     def clear_color(text):
@@ -400,56 +408,32 @@ class CliProgram:
             case _:
                 logger.setLevel(logging.DEBUG)
 
-    def is_flake_dir_exists(self):
-        res = self.run_privileged_task("is_dir_flake_exists")
-
-        return res == "OK"
-
-    def is_flake_file_exists(self):
-        res = self.run_privileged_task("is_flake_file_exists")
-
-        return res == "OK"
-
-    def run_privileged_task(self, name: str, *args: str):
-        self.write_to_pipe_check([name, *args])
-
-        task_result = self.readline_from_worker()
-
-        return task_result
-
-    def readline_from_worker(self):
-        return self.from_worker_file.readline().rstrip()
-
     def get_nixos_flake_dir(self):
         flake_dir = self.args.flake
         self.logger.debug(f"{flake_dir=}")
 
-        flake_dir = self.run_privileged_task(
-            "resolve_flake_dir", str(flake_dir))
-
-        self.logger.debug(f"  resolved to {flake_dir!r}")
-
-        if not self.is_flake_dir_exists():
+        try:
+            resolved_flake_dir = flake_dir.resolve(strict=True)
+        except OSError:
             self.exit_with_error(f"{flake_dir}: no such directory")
-        self.logger.debug("  exists")
 
-        if not self.is_flake_file_exists():
-            self.exit_with_error(f"{flake_dir}: this dir is not a flake")
-        self.logger.debug("  and it's a flake")
+        self.logger.debug(f"  resolved to {resolved_flake_dir!r}")
+        if not resolved_flake_dir.is_dir():
+            self.exit_with_error(f"{resolved_flake_dir}: no such directory")
+        if not (resolved_flake_dir / "flake.nix").is_file():
+            self.exit_with_error(f"{resolved_flake_dir}: this dir is not a flake")
 
-        lock_result = self.run_privileged_task("setup_tmp_lock")
+        if self.args.no_update_lock_file:
+            source_lock_file = resolved_flake_dir / self.FLAKE_LOCK
+            if source_lock_file.is_file():
+                try:
+                    shutil.copyfile(source_lock_file, self.lock_file_path)
+                except OSError as error:
+                    self.exit_with_error(
+                        f"preparing temporary lock file failed: {error}"
+                    )
 
-        if lock_result != "OK":
-            self.exit_with_error("preparing temporary lock file problem")
-
-        check_nixos_config = self.run_privileged_task("check_nixos_config")
-
-        if check_nixos_config != "OK":
-            self.exit_with_error(
-                f"{flake_dir}: flake: nixosConfigurations not found")
-        self.logger.debug("  with nixos configuration")
-
-        return flake_dir
+        return str(resolved_flake_dir)
 
     def get_sig_received_msg(self, signum: int):
         return f"'{signal.strsignal(signum)}' signal received"
@@ -546,10 +530,24 @@ class CliProgram:
 
     @synsignals.add_handling
     def update_lock_file(self):
-        update = self.run_privileged_task("update_lock_file")
+        command = [
+            "nix",
+            *self.NIX_EXTRA_EXPERIMENTAL_FEATURES,
+            "flake",
+            "update",
+            "--flake",
+            str(self.args.flake),
+            "--output-lock-file",
+            str(self.lock_file_path),
+        ]
+        update = self.run_cmd(
+            command,
+            "updating flake lock file...",
+            exit_on_error=False,
+        )
 
-        if update != "OK":
-            self.exit_with_error("updating lock file error")
+        if update.returncode != 0 or not self.lock_file_path.is_file():
+            self.exit_with_error("updating lock file error", update.returncode or self.EXIT_ERR_CODE)
 
     @synsignals.add_handling
     def build_nixos_system(self):
@@ -557,16 +555,36 @@ class CliProgram:
                         f"{self.NIXOS_CONFIG_FLAKE_OUT}")
         self.logger.debug(f"{nixos_config=}")
 
-        self.logger.info("building nixos system...")
+        command = [
+            "nix",
+            *self.NIX_EXTRA_EXPERIMENTAL_FEATURES,
+            "build",
+            "--out-link",
+            str(self.result_link),
+            "--no-write-lock-file",
+        ]
+        if self.lock_file_path.is_file():
+            command.extend([
+                "--reference-lock-file",
+                str(self.lock_file_path),
+            ])
+        command.append(nixos_config)
 
-        build = self.run_privileged_task("build", nixos_config)
+        build = self.run_cmd(
+            command,
+            "building nixos system...",
+            exit_on_error=False,
+        )
+        if build.returncode != 0:
+            self.exit_with_error(
+                "building nixos system subprocess error",
+                build.returncode,
+            )
 
-        if build == "OK":
-            self.logger.info("ok")
-        else:
-            self.exit_with_error("building nixos system subprocess error")
-
-        self.upgraded_system_closure = self.readline_from_worker()
+        try:
+            self.upgraded_system_closure = str(self.result_link.resolve(strict=True))
+        except OSError:
+            self.exit_with_error("could not resolve built system closure")
 
         self.logger.debug(f"{self.upgraded_system_closure=}")
 
@@ -578,12 +596,13 @@ class CliProgram:
         ):
             self.exit_with_success("no changes found")
 
-        self.diff = self.run_cmd(
+        diff = self.run_cmd(
             ["nvd", "--color=always", "diff",
                 str(self.current_system_closure),
                 str(self.upgraded_system_closure)],
             "Comparing derivations...",
         )
+        self.diff = diff.stdout
 
         if self.has_pkgs_changes():
             self.logger.warning("package changes found")
@@ -594,6 +613,81 @@ class CliProgram:
     def print_updates(self):
         self.process_diff()
         print(self.diff)
+
+    def report_activation_result(self, result: activation.ActivationResult):
+        self.logger.warning(
+            "activation result: system=%s, lock=%s, commit=%s",
+            result.system,
+            result.lock,
+            result.commit,
+        )
+
+        if result.system != "switched":
+            self.logger.error("system activation did not switch: %s", result.system)
+            return
+        if result.lock == "failed":
+            self.logger.error(
+                "system switched, but the updated flake.lock could not be published"
+            )
+        if result.commit == "failed":
+            self.logger.error("system switched, but the repository commit failed")
+        elif result.commit == "not-git":
+            self.logger.error(
+                "system switched, but the flake directory is not a Git repository"
+            )
+
+    def run_privileged_activation(self) -> activation.ActivationResult:
+        try:
+            lock_file_bytes = (
+                self.lock_file_path.read_bytes()
+                if not self.args.no_update_lock_file
+                else None
+            )
+        except OSError as error:
+            self.exit_with_error(f"could not read temporary lock file: {error}")
+
+        commit_message = (
+            None if self.args.no_commit else self.get_commit_msg()
+        )
+        env_path = shutil.which("env")
+        if env_path is None:
+            self.exit_with_error("GNU env is not available in the packaged PATH")
+
+        request = activation.ActivationRequest(
+            env_path=env_path,
+            supported_signals=self.supported_signals,
+            sudo_path=activation.DEFAULT_SUDO_PATH,
+            helper_path=activation.HELPER_PATH,
+            expected_current=str(self.current_system_closure),
+            system_closure=str(self.upgraded_system_closure),
+            flake_dir=str(self.args.flake),
+            lock_file_bytes=lock_file_bytes,
+            commit_message=commit_message,
+            no_commit=self.args.no_commit,
+        )
+        command = activation.build_activation_command(request)
+        manifest = activation.encode_activation_request(request)
+
+        with synsignals.BlockedHandling():
+            try:
+                completed = subprocess.run(
+                    command,
+                    input=manifest,
+                    stdout=subprocess.PIPE,
+                    stderr=None,
+                    text=True,
+                    check=False,
+                )
+                result = activation.parse_activation_result(
+                    completed.stdout,
+                    completed.returncode,
+                )
+            except (OSError, ValueError) as error:
+                self.logger.error("privileged activation request failed: %s", error)
+                raise
+            self.report_activation_result(result)
+
+        return result
 
     @synsignals.add_handling
     def upgrade_system(self):
@@ -627,56 +721,13 @@ class CliProgram:
 
         if answer.upper() == 'Y':
             self.logger.info("switching to upgraded system...")
+            result = self.run_privileged_activation()
 
-            upgrade = self.run_privileged_task(
-                "upgrade", str(self.upgraded_system_closure))
-
-            # Commit flake repo
-            if not self.args.no_commit and upgrade == "OK":
-                # Write commit message
-                with os.fdopen(self.COMMIT_MSG_W_FD, 'w') as f:
-                    f.write(self.get_commit_msg())
-
-                commit = self.run_privileged_task("commit")
-
-                if commit == "OK":
-                    self.logger.warning("flake repo committed")
-                elif commit == "NO_CHANGES":
-                    self.logger.info("no tracked changes to commit")
-                elif commit == "ERR_REPO_HOME":
-                    self.logger.error(
-                        "could not determine the repository owner's home directory")
-                else:
-                    self.logger.error("flake repo committing subprocess error")
-
-            if upgrade == "OK":
+            if result.system == "switched":
                 self.exit_with_success("system upgraded")
-            else:
-                self.exit_with_error("switching to upgraded system error")
+            self.exit_with_error("switching to upgraded system error")
 
-        else:
-            self.exit_with_success("nothing changed")
-
-    def write_to_pipe_check(self, cmd: list[str]):
-        self.write_to_pipe(cmd)
-
-        os.set_blocking(self.SH_PY_FD, False)
-        attempts = 100
-        while attempts > 0:
-            time.sleep(0.01)
-            pong = self.readline_from_worker()
-            if pong:
-                break
-            attempts -= 1
-        os.set_blocking(self.SH_PY_FD, True)
-
-        if pong != "PONG":
-            self.exit_with_error("privileged process is not responding")
-
-    def write_to_pipe(self, cmd: list[str]):
-        cmd = self.IFS.join(cmd) + "\n"
-
-        os.write(self.PY_SH_FD, cmd.encode())
+        self.exit_with_success("nothing changed")
 
     def get_commit_msg(self):
         header = f"{self.NAME}: Auto commit\n\n"

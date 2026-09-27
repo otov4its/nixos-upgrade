@@ -6,11 +6,12 @@ set -o pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PROJECT_ROOT
-readonly WORKER="$PROJECT_ROOT/src/lib/privileged-worker"
+readonly HELPER="$PROJECT_ROOT/src/lib/nixos-upgrade-activate"
 
-commit_block=$(sed -n '/^    "commit")$/,/^    ;;$/p' "$WORKER")
+commit_block=$(sed -n '/^function commit_repository {$/,/^}$/p' "$HELPER")
+owner_block=$(sed -n '/^function run_as_owner {$/,/^}$/p' "$HELPER")
 
-if [[ "$commit_block" != *'--all'* ]]; then
+if [[ "$commit_block" != *'commit'* || "$commit_block" != *'--all'* ]]; then
   printf 'auto-commit must include all modified tracked files\n' >&2
   exit 1
 fi
@@ -20,30 +21,24 @@ if [[ "$commit_block" == *'--allow-empty'* ]]; then
   exit 1
 fi
 
-if [[ "$commit_block" == *'GIT_COMMITTER_EMAIL="<>"'* ]]; then
-  printf 'auto-commit must not use an invalid committer email\n' >&2
+if [[ "$commit_block" != *'--file=-'* ]]; then
+  printf 'auto-commit must receive the message on stdin\n' >&2
   exit 1
 fi
 
-home_assignment="HOME=\"\$repo_home\""
-if [[ "$commit_block" != *"$home_assignment"* ]]; then
-  printf 'auto-commit must use the repository owner home directory\n' >&2
+if [[ "$commit_block" != *'--porcelain --untracked-files=no'* ]]; then
+  printf 'auto-commit must detect tracked changes before committing\n' >&2
   exit 1
 fi
 
-if [[ "$commit_block" != *'NO_CHANGES'* ]]; then
-  printf 'auto-commit must report when there are no tracked changes\n' >&2
+if [[ "$owner_block" != *'HOME=$home'* || "$owner_block" != *'runuser --user'* ]]; then
+  printf 'owner commands must run with the repository owner credentials and HOME\n' >&2
   exit 1
 fi
 
-if [[ "$commit_block" != *'ERR_REPO_HOME'* ]]; then
-  printf 'auto-commit must report owner home lookup errors through IPC\n' >&2
+if ! grep --fixed-strings --quiet -- 'lookup_owner_account "$git_uid"' "$HELPER"; then
+  printf 'auto-commit must select the Git-directory owner\n' >&2
   exit 1
 fi
 
-if [[ "$commit_block" == *'could not determine home directory'* ]]; then
-  printf 'auto-commit must not print raw worker diagnostics\n' >&2
-  exit 1
-fi
-
-printf 'ok: auto-commit policy preserves tracked changes and owner identity\n'
+printf 'ok: auto-commit preserves tracked changes and Git-directory owner identity\n'

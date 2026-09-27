@@ -21,11 +21,6 @@ if [[ "$script" != *'nixos-upgrade.lock'* ]]; then
   exit 1
 fi
 
-worker_reference="\"\$WORKER\""
-if [[ "$check_block" == *"$worker_reference"* ]]; then
-  printf 'singleton lock must not use the versioned worker path\n' >&2
-  exit 1
-fi
 
 lock_redirect=">>\"\$lock_file\""
 if [[ "$check_block" != *"$lock_redirect"* ]]; then
@@ -83,4 +78,4 @@ wait "$first_pid"
 first_pid=""
 test -f "$RUNTIME_DIR/nixos-upgrade.lock"
 
-printf 'ok: singleton lock is per-user and independent of worker version\n'
+printf 'ok: singleton lock is per-user with a stable runtime path\n'

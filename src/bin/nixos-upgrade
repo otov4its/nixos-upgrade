@@ -6,63 +6,30 @@ set -o pipefail
 
 export PATH="@path@"
 export NAME="@name@"
-# Internal field separator for privileged process commands
-export CMD_IFS=":"
-export LOCK_FD
-export PY_SH_FD
-export SH_PY_FD
-export COMMIT_MSG_W_FD
-export COMMIT_MSG_R_FD
-export TMP_DIR
-export TERM_CORE_SIGS
-
-readonly WORKER="@worker@"
-readonly DROP_PRIV=(setpriv --reuid nobody --regid nobody
-                   --clear-groups --inh-caps=-all)
 
 function get_term_core_default_action_sigs {
   local sigs=(
     SIGHUP SIGINT SIGQUIT SIGUSR1 SIGUSR2 SIGTERM SIGPIPE SIGXCPU SIGXFSZ SIGALRM
   )
-
   local signums=()
-  local s
-  for s in "${sigs[@]}"
-  do
-    signums+=("$(kill -l "$s")")
+  local signum
+
+  for signum in "${sigs[@]}"; do
+    signums+=("$(kill -l "$signum")")
   done
 
-  printf "%s" "${signums[*]}"
+  printf '%s' "${signums[*]}"
+}
+
+function array_to_csv {
+  printf '%s' "${1// /,}"
 }
 
 TERM_CORE_SIGS="$(get_term_core_default_action_sigs)"
-
-function array_to_csv {
-  printf "%s" "${1// /,}"
-}
-
-function setup_ipc {
-  # Anonymous pipe hijacking trick
-  exec {PY_SH_FD}<><(:)
-  exec {SH_PY_FD}<><(:)
-
-  local tmp
-  tmp=$(mktemp)
-
-  # For git commit message use a regular file
-  exec {COMMIT_MSG_W_FD}>"$tmp"
-  exec {COMMIT_MSG_R_FD}<"$tmp"
-
-  rm "$tmp"
-}
-
-function mktemp_dir {
-  TMP_DIR=$(mktemp --directory --tmpdir "$NAME.XXXXXXXXXX")
-  readonly TMP_DIR
-}
+export TERM_CORE_SIGS
 
 function log_error {
-  echo "$NAME: error: $*" >&2
+  printf '%s: error: %s\n' "$NAME" "$*" >&2
 }
 
 function parse_options {
@@ -106,15 +73,14 @@ function parse_options {
 }
 
 function check_singleton {
-  local lock_file="${XDG_RUNTIME_DIR:-}"
+  local runtime_dir="${XDG_RUNTIME_DIR:-}"
 
-  if [[ -z "$lock_file" ]]; then
+  if [[ -z "$runtime_dir" ]]; then
     log_error "XDG_RUNTIME_DIR is not set"
     exit 1
   fi
 
-  lock_file="$lock_file/nixos-upgrade.lock"
-
+  local lock_file="$runtime_dir/nixos-upgrade.lock"
   if ! exec {LOCK_FD}>>"$lock_file"; then
     log_error "unable to open singleton lock '$lock_file'"
     exit 1
@@ -126,35 +92,13 @@ function check_singleton {
   fi
 }
 
-function check_permissions {
-  if ! "${DROP_PRIV[@]}" true; then
-    log_error "unable to drop privileges to 'nobody'; try using 'sudo'"
-    exit 1
-  fi
-}
-
 function main {
   parse_options "$@"
-
-  # Prohibit multiple runs
   check_singleton
 
-  # Drop privelege permissions
-  check_permissions
-
-  mktemp_dir
-  setup_ipc
-
-  $WORKER &
-
-  # Drop priveleges.
-  # Blocking signals is here to give the python script time
-  # to set custom handlers for them in case such signals are
-  # received too early.
   local py_opts=(@py_opts@)
-  exec "${DROP_PRIV[@]}" \
-      env --block-signal="$(array_to_csv "$TERM_CORE_SIGS")" HOME=/var/empty \
-        python "${py_opts[@]}" "@pyfile@" "$@"
+  exec env --block-signal="$(array_to_csv "$TERM_CORE_SIGS")" \
+    python "${py_opts[@]}" "@pyfile@" "$@"
 }
 
 main "$@"

@@ -14,8 +14,13 @@ if grep --extended-regexp --quiet -- '--replace([[:space:]]|$)' "$PACKAGE_NIX"; 
 fi
 
 replace_fail_count="$(grep --extended-regexp --count -- '--replace-fail([[:space:]]|$)' "$PACKAGE_NIX" || true)"
-if [[ "$replace_fail_count" -ne 10 ]]; then
-  printf 'expected 10 --replace-fail directives, found %s\n' "$replace_fail_count" >&2
+if [[ "$replace_fail_count" -ne 12 ]]; then
+  printf 'expected 12 --replace-fail directives, found %s\n' "$replace_fail_count" >&2
+  exit 1
+fi
+
+if grep --extended-regexp --quiet -- 'privileged-worker|@worker@' "$PACKAGE_NIX"; then
+  printf 'package.nix still references the persistent privileged worker\n' >&2
   exit 1
 fi
 
@@ -25,7 +30,8 @@ for placeholder in \
   '@description@' \
   '@man@' \
   '@path@' \
-  '@worker@' \
+  '@helper@' \
+  '@bash@' \
   '@pyfile@' \
   '@py_opts@'
 do

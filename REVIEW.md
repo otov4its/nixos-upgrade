@@ -21,18 +21,17 @@ Scope: everything under `src/`, `flake.nix`, docs and release process.
 
 ```mermaid
 flowchart TD
-    A["bin/nixos-upgrade (bash, root)<br/>flock · mktemp · parse --color/-h/-V"] -->|"$WORKER &"| W["lib/privileged-worker (bash, root)<br/>cp flake → tmp · nix flake update · nix build<br/>nix-env --set · switch-to-configuration · git commit"]
-    A -->|"exec setpriv nobody"| P["lib/nixos-upgrade.py (python, nobody)<br/>argparse · logging · spinner · prompt · nvd diff"]
-    P <-->|"2 × RDWR anonymous pipes<br/>':'-joined line protocol<br/>PONG / OK / ERR / EXIT / payload"| W
-    P -->|"tmp file fd (commit message)"| W
+    L["bin/nixos-upgrade (bash, invoking user)<br/>fixed PATH · per-user flock"] --> P["lib/nixos-upgrade.py (python, invoking user)<br/>Nix update/build · nvd diff · prompt"]
+    P -->|"after confirmation: sudo + JSON stdin"| H["lib/nixos-upgrade-activate (one-shot Bash, root)"]
+    H --> S["system profile · switch-to-configuration"]
+    H --> R["lock publication and Git commit as repository owner"]
 ```
 
-Key observation: **almost everything with real consequences already runs as
-root** (flake evaluation, build, profile switch, `switch-to-configuration`,
-`git commit`). The unprivileged side is argparse, logging, yaspin, the y/n
-prompt and `nvd diff`. The privilege boundary costs roughly 400 lines of
-IPC and signal machinery, is the root cause of most findings in section A,
-and protects very little.
+The long-lived controller, Nix update/build, `nvd diff`, and user interface run
+with the invoking user's credentials. A fixed-purpose one-shot helper runs as
+root only after confirmation, for system activation and the minimum
+post-activation repository work. The persistent root worker and custom IPC
+protocol have been removed.
 
 ---
 
@@ -177,28 +176,20 @@ concurrently. Use a fixed path such as `/run/lock/nixos-upgrade.lock`.
 
 ## B. Architectural recommendations
 
-### B.1 Move (or drop) the privilege boundary
+### B.1 Retain privilege separation with one-shot sudo activation — selected and implemented
 
-Recommendation: one Python process running as root, driving everything via
-`subprocess`; use `setpriv`/`runuser` *per command* only where it buys
-something (`nvd diff` as `nobody`; `git commit` as the repo owner — already
-done).
+The selected design keeps Python and the long-lived controller unprivileged.
+Flake update/build, `nvd diff`, and confirmation run as the invoking user. Only
+after a positive confirmation does the application invoke a fixed-purpose,
+packaged Bash helper through `/run/wrappers/bin/sudo`; the helper activates the
+system and performs the minimum lock-publication and repository-owner commit
+work required after a successful switch. `--assume-yes` skips confirmation but
+does not bypass sudo authorization, and the package installs no sudoers rule.
 
-What this removes: `privileged-worker`, both pipes, PONG, `CMD_IFS`, the
-duplicated `--color/-h/-V` parsing in bash, and most of `synsignals`.
-What it fixes structurally: A.2, A.3, A.4, A.5 — children become signalable,
-and exit codes / EOF come for free from `subprocess`.
-
-If privilege separation is to be kept, the minimum hardening is:
-
-* real unidirectional pipes (`coproc` or two FIFOs in `$TMP_DIR`) so EOF
-  works;
-* NUL-delimited framing (`read -d ''`) or base64 for arguments;
-* drop `errexit` in the dispatcher (or `set -E` + explicit `if` per command)
-  so `send_err` is actually reachable;
-* a parent-liveness watchdog in the worker (`read -t 1` loop + `kill -0`);
-* a `CANCEL` message the worker polls while long commands run in the
-  background, so Ctrl‑C can reach `nix build`.
+This removes the persistent root worker and line protocol without running an
+interpreter as root. The host remains responsible for sudo policy. The
+implementation is covered by the `sudo-activation` NixOS VM check, including
+normal-user execution, denied authorization, and signals during activation.
 
 ### B.2 Stop copying the flake directory, but choose source semantics explicitly
 
@@ -413,8 +404,11 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
          `overrideAttrs` callback), statix/deadnix checks
 2. **B.2 source semantics** — Choice 3 is selected and implemented; new
    files must be indexed by Git before Nix can use them.
-3. **Decide the remaining architecture direction** — B.1 (root controller,
-   recommended) vs. hardened IPC — since B.3–B.6 are shaped by that choice.
-4. **Tests first** (B.7), especially the VM test, so the refactor has a
-   safety net.
-5. **Refactor** per B.1–B.6, then B.9 features.
+3. **B.1 privilege boundary — selected and implemented** — keep the
+   controller unprivileged and elevate only the fixed-purpose activation helper
+   through host-configured sudo, after confirmation.
+4. **B.7 testing — implemented** — Python/unit and workflow regressions plus a
+   NixOS VM check cover the normal-user and privileged activation paths.
+5. **Reassess remaining recommendations individually** — B.4–B.6 and B.9 are
+   separate follow-ups; B.3's `nix flake show` pre-check was removed with the
+   user-side workflow.
