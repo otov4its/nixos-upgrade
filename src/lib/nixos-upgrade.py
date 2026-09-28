@@ -17,6 +17,7 @@ import tempfile
 import activation
 import synsignals
 import colorformatter
+import nvd
 
 import yaspin
 import yaspin.spinners
@@ -482,46 +483,10 @@ class CliProgram:
         return (self.logger.level == logging.DEBUG)
 
     def has_pkgs_changes(self) -> bool:
-        return self.count_changes().all > 0
-
-    def count_changes(self):
-        diff = self.clear_color(self.diff)
-        changes = types.SimpleNamespace()
-
-        changes.added = len(re.findall(r"\[A.\]", diff))
-        changes.removed = len(re.findall(r"\[R.\]", diff))
-        changes.upgraded = len(re.findall(r"\[U.\]", diff))
-        changes.downgraded = len(re.findall(r"\[D.\]", diff))
-        changes.changed = len(re.findall(r"\[C.\]", diff))
-        changes.all = (changes.added + changes.removed + changes.upgraded +
-                       changes.downgraded + changes.changed)
-
-        return changes
+        return nvd.count_changes(self.diff).total > 0
 
     def get_changes_stat_str(self):
-        changes = self.count_changes()
-        if changes.all == 0:
-            return "Config changes found"
-
-        stat = f"{changes.all} package changes: "
-
-        if changes.added > 0:
-            stat += f"{changes.added} added, "
-        if changes.removed > 0:
-            stat += f"{changes.removed} removed, "
-        if changes.upgraded > 0:
-            stat += f"{changes.upgraded} upgraded, "
-        if changes.downgraded > 0:
-            stat += f"{changes.downgraded} downgraded, "
-        if changes.changed > 0:
-            stat += f"{changes.changed} changed, "
-
-        stat = stat[:-2]
-
-        return stat
-
-    def process_diff(self) -> str:
-        self.diff = "\n".join(self.diff.split("\n")[2:])
+        return nvd.format_change_summary(nvd.count_changes(self.diff))
 
     @synsignals.add_handling
     def check_flake_dir(self):
@@ -611,7 +576,7 @@ class CliProgram:
 
     @synsignals.add_handling
     def print_updates(self):
-        self.process_diff()
+        self.diff = nvd.format_diff(self.diff)
         print(self.diff)
 
     def report_activation_result(self, result: activation.ActivationResult):

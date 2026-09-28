@@ -10,6 +10,8 @@
 * Reject conflicting `--assume-yes` and `--assume-no` options.
 * Classify package changes using NVD status markers instead of arbitrary
   bracketed text.
+* Extract NVD diff parsing and summary formatting into pure, independently tested
+  functions.
 * Configure logging exception handling through `logging.raiseExceptions`.
 * Represent signal preservation policies as typed callable functions.
 * Limit deferred signal handling to the application's supported termination signals.
