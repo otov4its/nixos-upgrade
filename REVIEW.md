@@ -308,12 +308,12 @@ HUP/INT/QUIT/TERM/PIPE — stop the spinner, terminate the child, exit
 for cleanup would cover this with far less surface area. (Also see A.6 on
 the signal list.)
 
-### B.6 Spinner
+### B.6 Spinner — addressed
 
-The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
-`sys.stdout = sys.stderr` swapping in `get_spinner` / `spinner_start` /
-`spinner_stop` (`nixos-upgrade.py:359-388`) can be removed; today any
-`print()` while the spinner runs goes to stderr.
+The controller now passes yaspin its selected output stream explicitly:
+`sys.stderr` when stderr is the preferred colored TTY, otherwise `sys.stdout`.
+Spinner setup/start/stop no longer swap the process-wide `sys.stdout`, so other
+Python output keeps its original destination while the spinner runs.
 
 ### B.7 Testing — currently none
 
@@ -409,6 +409,6 @@ The packaged yaspin (3.4.0) accepts `stream=sys.stderr`. The
    through host-configured sudo, after confirmation.
 4. **B.7 testing — implemented** — Python/unit and workflow regressions plus a
    NixOS VM check cover the normal-user and privileged activation paths.
-5. **Reassess remaining recommendations individually** — B.4–B.6 and B.9 are
-   separate follow-ups; B.3's `nix flake show` pre-check was removed with the
-   user-side workflow.
+5. **Reassess remaining recommendations individually** — B.4, B.5 and B.9
+   are separate follow-ups; B.6's spinner stream handling is addressed. B.3's
+   `nix flake show` pre-check was removed with the user-side workflow.

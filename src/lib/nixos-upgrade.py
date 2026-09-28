@@ -59,7 +59,6 @@ class CliProgram:
         self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
         self.result_link = self.temporary_path / "result"
         self.running_subproc = None
-        self._stdout = sys.stdout
         self.args = self.parse_args()
         self.logger = self.get_logger()
 
@@ -369,34 +368,26 @@ class CliProgram:
 
     def get_spinner(self):
         if self.STDERR_IS_A_TTY and self.colored_stderr:
-            # By default yaspin writes to stdout, but we need stderr
-            sys.stdout = sys.stderr
+            stream = sys.stderr
         elif self.STDOUT_IS_A_TTY and self.colored_stdout:
-            pass
+            stream = sys.stdout
         else:
             return None
 
-        spinner = yaspin.yaspin(yaspin.spinners.Spinners.point,
-                                color="green")
-        sys.stdout = self._stdout
-
-        return spinner
+        return yaspin.yaspin(
+            yaspin.spinners.Spinners.point,
+            color="green",
+            stream=stream,
+        )
 
     def spinner_start(self, color="green"):
         if self.has_spinner:
-            if self.STDERR_IS_A_TTY:
-                # By default yaspin writes to stdout, but we need stderr
-                sys.stdout = sys.stderr
-
             self.spinner.color = color
             self.spinner.start()
 
     def spinner_stop(self):
         if self.has_spinner:
             self.spinner.stop()
-
-            # Restore stdout
-            sys.stdout = self._stdout
 
     def config_verbosity(self, logger):
         match self.args.verbosity:
