@@ -12,6 +12,7 @@ NAME=nixos-upgrade-test \
 python3 - "$PYTHON_FILE" <<'PY'
 import importlib.util
 import io
+import os
 import pathlib
 import sys
 import types
@@ -38,56 +39,71 @@ class FakeSpinner:
 
 
 class SpinnerStreamTests(unittest.TestCase):
-    def make_program(self, *, stderr_tty, stdout_tty):
+    def make_program(self, *, stderr_tty, stdout_tty, colored_stderr=True):
         program = object.__new__(module.CliProgram)
         program.STDERR_IS_A_TTY = stderr_tty
         program.STDOUT_IS_A_TTY = stdout_tty
         program.args = types.SimpleNamespace(
-            colored_stderr=True,
+            colored_stderr=colored_stderr,
             colored_stdout=True,
         )
         return program
 
-    def assert_spinner_stream(self, *, stderr_tty, stdout_tty, expected_name):
+    def assert_stderr_spinner(self, *, colored_stderr, expected_color):
         stdout = io.StringIO()
         stderr = io.StringIO()
         program = self.make_program(
-            stderr_tty=stderr_tty,
-            stdout_tty=stdout_tty,
+            stderr_tty=True,
+            stdout_tty=True,
+            colored_stderr=colored_stderr,
         )
         spinner = FakeSpinner()
-        expected_stream = stderr if expected_name == "stderr" else stdout
 
         def make_spinner(*args, color, stream):
-            self.assertEqual(color, "green")
-            self.assertIs(stream, expected_stream)
+            self.assertEqual(color, expected_color)
+            self.assertIs(stream, stderr)
             return spinner
 
         with (
+            mock.patch.dict(os.environ, {"TERM": "xterm"}),
             mock.patch.object(module.yaspin, "yaspin", make_spinner),
             mock.patch("sys.stdout", stdout),
             mock.patch("sys.stderr", stderr),
         ):
             program.spinner = program.get_spinner()
+            self.assertIs(program.spinner, spinner)
             self.assertIs(sys.stdout, stdout)
             program.spinner_start()
+            self.assertEqual(spinner.color, expected_color)
             self.assertIs(sys.stdout, stdout)
             program.spinner_stop()
             self.assertIs(sys.stdout, stdout)
 
     def test_prefers_stderr_without_redirecting_stdout(self):
-        self.assert_spinner_stream(
-            stderr_tty=True,
-            stdout_tty=True,
-            expected_name="stderr",
-        )
+        self.assert_stderr_spinner(colored_stderr=True, expected_color="green")
 
-    def test_uses_stdout_when_stderr_is_not_eligible(self):
-        self.assert_spinner_stream(
-            stderr_tty=False,
-            stdout_tty=True,
-            expected_name="stdout",
-        )
+    def test_no_color_still_shows_a_monochrome_spinner(self):
+        self.assert_stderr_spinner(colored_stderr=False, expected_color=None)
+
+    def test_dumb_terminal_disables_spinner(self):
+        program = self.make_program(stderr_tty=True, stdout_tty=True)
+
+        with (
+            mock.patch.dict(os.environ, {"TERM": "dumb"}),
+            mock.patch.object(module.yaspin, "yaspin") as make_spinner,
+        ):
+            self.assertIsNone(program.get_spinner())
+            make_spinner.assert_not_called()
+
+    def test_does_not_fall_back_to_stdout_when_stderr_is_not_a_tty(self):
+        program = self.make_program(stderr_tty=False, stdout_tty=True)
+
+        with (
+            mock.patch.dict(os.environ, {"TERM": "xterm"}),
+            mock.patch.object(module.yaspin, "yaspin") as make_spinner,
+        ):
+            self.assertIsNone(program.get_spinner())
+            make_spinner.assert_not_called()
 
 
 unittest.main(argv=[sys.argv[0]])

@@ -13,6 +13,8 @@
 * Extract NVD diff parsing and summary formatting into pure, independently tested
   functions.
 * Configure yaspin's output stream explicitly instead of redirecting `sys.stdout`.
+* Keep the spinner monochrome when color is disabled, and disable it on dumb
+  or non-interactive terminals.
 * Configure logging exception handling through `logging.raiseExceptions`.
 * Represent signal preservation policies as typed callable functions.
 * Limit deferred signal handling to the application's supported termination signals.

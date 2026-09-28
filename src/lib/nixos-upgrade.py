@@ -367,22 +367,17 @@ class CliProgram:
         return logger
 
     def get_spinner(self):
-        if self.STDERR_IS_A_TTY and self.colored_stderr:
-            stream = sys.stderr
-        elif self.STDOUT_IS_A_TTY and self.colored_stdout:
-            stream = sys.stdout
-        else:
-            return None
-
-        return yaspin.yaspin(
-            yaspin.spinners.Spinners.point,
-            color="green",
-            stream=stream,
-        )
+        if self.STDERR_IS_A_TTY and os.environ.get("TERM") != "dumb":
+            color = "green" if self.colored_stderr else None
+            return yaspin.yaspin(
+                yaspin.spinners.Spinners.point,
+                color=color,
+                stream=sys.stderr,
+            )
 
     def spinner_start(self, color="green"):
         if self.has_spinner:
-            self.spinner.color = color
+            self.spinner.color = color if self.colored_stderr else None
             self.spinner.start()
 
     def spinner_stop(self):
