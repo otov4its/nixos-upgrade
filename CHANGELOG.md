@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+* Delegate CLI parsing and the per-user singleton lock to Python; keep the
+  Bash launcher focused on runtime setup and blocking signals before Python
+  starts.
 * Run the controller and Nix preparation as the invoking user; request sudo
   only after upgrade confirmation to run a fixed-purpose activation helper.
   `--assume-yes` does not bypass sudo authorization.

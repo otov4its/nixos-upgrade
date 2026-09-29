@@ -21,7 +21,7 @@ Scope: everything under `src/`, `flake.nix`, docs and release process.
 
 ```mermaid
 flowchart TD
-    L["bin/nixos-upgrade (bash, invoking user)<br/>fixed PATH · per-user flock"] --> P["lib/nixos-upgrade.py (python, invoking user)<br/>Nix update/build · nvd diff · prompt"]
+    L["bin/nixos-upgrade (bash, invoking user)<br/>fixed PATH · block signals before Python"] --> P["lib/nixos-upgrade.py (python, invoking user)<br/>CLI parsing · per-user flock · Nix update/build · nvd diff · prompt"]
     P -->|"after confirmation: sudo + JSON stdin"| H["lib/nixos-upgrade-activate (one-shot Bash, root)"]
     H --> S["system profile · switch-to-configuration"]
     H --> R["lock publication and Git commit as repository owner"]
@@ -364,9 +364,6 @@ Python output keeps its original destination while the spinner runs.
 * Allow selective input updates (`nixos-upgrade nixpkgs home-manager`);
   today `nix flake update` always updates everything
   (`privileged-worker:137-140`).
-* Make `--help` single-source: render the man page to plain text at build
-  time and `cat` it, instead of `man --pager=cat … | head -n -4 | tail -n +3`
-  (`bin/nixos-upgrade:82`).
 
 ---
 

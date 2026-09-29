@@ -9,6 +9,7 @@ readonly PROJECT_ROOT
 readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 TEST_ROOT="$(mktemp --directory /tmp/nixos-upgrade-workflow-test.XXXXXXXXXX)"
 readonly TEST_ROOT
+readonly RUNTIME_DIR="$TEST_ROOT/runtime"
 readonly FAKE_BIN="$TEST_ROOT/fake bin"
 readonly FLAKE_DIR="$TEST_ROOT/flake source"
 readonly CURRENT_SYSTEM="$TEST_ROOT/current system"
@@ -26,7 +27,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-mkdir --parents "$FAKE_BIN" "$FLAKE_DIR" "$CURRENT_SYSTEM" "$NEW_SYSTEM"
+mkdir --parents "$RUNTIME_DIR" "$FAKE_BIN" "$FLAKE_DIR" "$CURRENT_SYSTEM" "$NEW_SYSTEM"
 printf 'flake source\n' > "$FLAKE_DIR/flake.nix"
 printf 'original lock\n' > "$FLAKE_DIR/flake.lock"
 
@@ -163,6 +164,7 @@ export TEST_SUDO_INPUT="$SUDO_INPUT"
 export TEST_SUDO_OPTIONS="$SUDO_OPTIONS"
 export NAME=nixos-upgrade-test
 export TERM_CORE_SIGS='2 15'
+export XDG_RUNTIME_DIR="$RUNTIME_DIR"
 
 run_app() {
   python3 - "$PYTHON_FILE" "$CURRENT_SYSTEM" "$FAKE_SUDO" "$FAKE_HELPER" "$@" <<'PY'
@@ -328,11 +330,24 @@ if grep --extended-regexp --quiet 'privileged-worker|setpriv|PY_SH_FD|SH_PY_FD|C
   printf 'launcher still contains the worker protocol or privilege drop\n' >&2
   exit 1
 fi
-for launcher_contract in 'XDG_RUNTIME_DIR' 'nixos-upgrade.lock' '@path@' 'TERM_CORE_SIGS' 'block-signal'; do
+for launcher_contract in '@path@' '@name@' '@version@' 'TERM_CORE_SIGS' 'block-signal'; do
   if ! grep --fixed-strings --quiet -- "$launcher_contract" "$PROJECT_ROOT/src/bin/nixos-upgrade"; then
     printf 'launcher is missing required behavior: %s\n' "$launcher_contract" >&2
     exit 1
   fi
 done
+
+for python_contract in 'XDG_RUNTIME_DIR' 'nixos-upgrade.lock' 'fcntl.flock'; do
+  if ! grep --fixed-strings --quiet -- "$python_contract" "$PYTHON_FILE"; then
+    printf 'Python CLI is missing required behavior: %s\n' "$python_contract" >&2
+    exit 1
+  fi
+done
+
+if grep --extended-regexp --quiet 'parse_options|check_singleton|XDG_RUNTIME_DIR|flock|man --pager' \
+  "$PROJECT_ROOT/src/bin/nixos-upgrade"; then
+  printf 'launcher still parses CLI options or manages the singleton lock\n' >&2
+  exit 1
+fi
 
 printf 'ok: user workflow keeps Nix unprivileged and elevates only after confirmation\n'

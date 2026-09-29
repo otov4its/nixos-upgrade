@@ -10,6 +10,7 @@ import subprocess
 import pathlib
 import socket
 import enum
+import fcntl
 import time
 import shutil
 import tempfile
@@ -31,6 +32,7 @@ class ColorOption(enum.StrEnum):
 
 class CliProgram:
     NAME = os.environ["NAME"]
+    VERSION = os.environ.get("VERSION", "development")
     NIXOS_FLAKE_DEFAULT_PATH = "/etc/nixos/"
     FLAKE_LOCK = "flake.lock"
     STDIN_IS_A_TTY = os.isatty(sys.__stdin__.fileno())
@@ -52,12 +54,6 @@ class CliProgram:
     ]
 
     def __init__(self):
-        self.temporary_directory = tempfile.TemporaryDirectory(
-            prefix=f"{self.NAME}-"
-        )
-        self.temporary_path = pathlib.Path(self.temporary_directory.name)
-        self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
-        self.result_link = self.temporary_path / "result"
         self.running_subproc = None
         self.args = self.parse_args()
         self.logger = self.get_logger()
@@ -72,6 +68,15 @@ class CliProgram:
                 "unrecognized arguments: " + ' '.join(self.args._argv),
             )
 
+        self.singleton_lock_fd = None
+        self.check_singleton()
+
+        self.temporary_directory = tempfile.TemporaryDirectory(
+            prefix=f"{self.NAME}-"
+        )
+        self.temporary_path = pathlib.Path(self.temporary_directory.name)
+        self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
+        self.result_link = self.temporary_path / "result"
         self.spinner = self.get_spinner()
         self.current_system_closure = self.get_current_system_closure()
         self.upgraded_system_closure = None
@@ -79,6 +84,31 @@ class CliProgram:
         self.setup_signals()
         self.setup_excepthook()
 
+    def check_singleton(self):
+        runtime_dir = os.environ.get("XDG_RUNTIME_DIR")
+        if not runtime_dir:
+            self.exit_with_error("XDG_RUNTIME_DIR is not set")
+
+        lock_file = pathlib.Path(runtime_dir) / "nixos-upgrade.lock"
+        try:
+            lock_fd = os.open(lock_file, os.O_CREAT | os.O_RDWR, 0o600)
+        except OSError as error:
+            self.exit_with_error(
+                f"unable to open singleton lock '{lock_file}': {error}"
+            )
+
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(lock_fd)
+            self.exit_with_error("process is already running")
+        except OSError as error:
+            os.close(lock_fd)
+            self.exit_with_error(
+                f"unable to lock singleton lock '{lock_file}': {error}"
+            )
+
+        self.singleton_lock_fd = lock_fd
 
     def setup_excepthook(self):
         # Uncaught exceptions
@@ -246,6 +276,12 @@ class CliProgram:
             exit_on_error=False
         )
 
+        parser.add_argument(
+            '-V', '--version',
+            action='version',
+            version=self.VERSION,
+        )
+
         parser.add_argument('--flake',
                             help=f"Nixos flake dir \
                                 (default: {self.NIXOS_FLAKE_DEFAULT_PATH})",
@@ -306,8 +342,10 @@ class CliProgram:
                     self.is_output_colored()
             elif args.color == ColorOption.ALWAYS:
                 args.colored_stdout, args.colored_stderr = True, True
+                os.environ["FORCE_COLOR"] = "1"
             elif args.color == ColorOption.NEVER:
                 args.colored_stdout, args.colored_stderr = False, False
+                os.environ[self.NO_COLOR_ENV_NAME] = "1"
         except argparse.ArgumentError as e:
             args._error = e
             args.verbosity = 0

@@ -1,4 +1,4 @@
-{ lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, man, coreutils,
+{ lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, coreutils,
   glibc, getent, util-linux, jq, shellcheck,
   pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never",
   compilePythonBytecode ? true }:
@@ -13,7 +13,6 @@ let
   outLibDir = "$out/lib";
   manPage = "./share/man/man8/${name}.8";
   manPageMd = "${manPage}.md";
-  manPageGz = "${manPage}.gz";
 
   pythonWithPkgs = python3.withPackages (ps: with ps; [
     yaspin
@@ -26,7 +25,6 @@ let
     git
     nvd
     nix
-    man
     coreutils
     glibc.bin
     getent
@@ -59,7 +57,6 @@ stdenvNoCC.mkDerivation rec {
       --replace-fail "@description@" "${description}"
 
     substituteInPlace ${binSrc} \
-      --replace-fail "@man@" "$out/${manPageGz}" \
       --replace-fail "@version@" "${version}" \
       --replace-fail "@name@" "${name}" \
       --replace-fail "@path@" "${lib.makeBinPath runtimeInputs}" \

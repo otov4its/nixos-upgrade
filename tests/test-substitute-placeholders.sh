@@ -14,8 +14,8 @@ if grep --extended-regexp --quiet -- '--replace([[:space:]]|$)' "$PACKAGE_NIX"; 
 fi
 
 replace_fail_count="$(grep --extended-regexp --count -- '--replace-fail([[:space:]]|$)' "$PACKAGE_NIX" || true)"
-if [[ "$replace_fail_count" -ne 12 ]]; then
-  printf 'expected 12 --replace-fail directives, found %s\n' "$replace_fail_count" >&2
+if [[ "$replace_fail_count" -ne 11 ]]; then
+  printf 'expected 11 --replace-fail directives, found %s\n' "$replace_fail_count" >&2
   exit 1
 fi
 
@@ -28,7 +28,6 @@ for placeholder in \
   '@name@' \
   '@version@' \
   '@description@' \
-  '@man@' \
   '@path@' \
   '@helper@' \
   '@pyfile@' \

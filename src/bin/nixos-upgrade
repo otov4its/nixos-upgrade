@@ -6,6 +6,7 @@ set -o pipefail
 
 export PATH="@path@"
 export NAME="@name@"
+export VERSION="@version@"
 
 function get_term_core_default_action_sigs {
   local sigs=(
@@ -28,75 +29,10 @@ function array_to_csv {
 TERM_CORE_SIGS="$(get_term_core_default_action_sigs)"
 export TERM_CORE_SIGS
 
-function log_error {
-  printf '%s: error: %s\n' "$NAME" "$*" >&2
-}
-
-function parse_options {
-  local color="auto"
-
-  local opt
-  for opt in "$@"; do
-    case $opt in
-      -h|--help)
-        man --pager=cat --local-file "@man@" | head --lines=-4 | tail --lines=+3
-        exit 0
-      ;;
-
-      -V|--version)
-        echo "@version@"
-        exit 0
-      ;;
-
-      --color=*)
-        color="${opt#*=}"
-      ;;
-
-      --color)
-        color="next"
-      ;;
-
-      *)
-        if [[ "$color" == "next" ]]; then
-          color="$opt"
-        fi
-      ;;
-    esac
-  done
-
-  if [[ "$color" == "never" ]]; then
-    export NO_COLOR="1"
-  fi
-  if [[ "$color" == "always" ]]; then
-    export FORCE_COLOR="1"
-  fi
-}
-
-function check_singleton {
-  local runtime_dir="${XDG_RUNTIME_DIR:-}"
-
-  if [[ -z "$runtime_dir" ]]; then
-    log_error "XDG_RUNTIME_DIR is not set"
-    exit 1
-  fi
-
-  local lock_file="$runtime_dir/nixos-upgrade.lock"
-  if ! exec {LOCK_FD}>>"$lock_file"; then
-    log_error "unable to open singleton lock '$lock_file'"
-    exit 1
-  fi
-
-  if ! flock --nonblock "$LOCK_FD"; then
-    log_error "process is already running"
-    exit 1
-  fi
-}
-
 function main {
-  parse_options "$@"
-  check_singleton
-
   local py_opts=(@py_opts@)
+  # Keep signals pending until Python installs its handlers; otherwise, an
+  # early signal could take its default action during interpreter startup.
   exec env --block-signal="$(array_to_csv "$TERM_CORE_SIGS")" \
     python "${py_opts[@]}" "@pyfile@" "$@"
 }
