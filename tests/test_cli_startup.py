@@ -18,13 +18,13 @@ os.environ.setdefault("NAME", "nixos-upgrade-test")
 os.environ.setdefault("VERSION", "test-version")
 
 termcolor = types.ModuleType("termcolor")
-termcolor.colored = lambda text, *args, **kwargs: text
+setattr(termcolor, "colored", lambda text, *args, **kwargs: text)
 
 yaspin = types.ModuleType("yaspin")
 yaspin.__path__ = []
-yaspin.yaspin = lambda *args, **kwargs: None
+setattr(yaspin, "yaspin", lambda *args, **kwargs: None)
 spinners = types.ModuleType("yaspin.spinners")
-yaspin.spinners = spinners
+setattr(yaspin, "spinners", spinners)
 
 with mock.patch.dict(sys.modules, {
     "termcolor": termcolor,
@@ -35,6 +35,9 @@ with mock.patch.dict(sys.modules, {
         "nixos_upgrade_cli_startup_test",
         MODULE_PATH,
     )
+    if spec is None or spec.loader is None:
+        raise ImportError(f"Could not load module from {MODULE_PATH}")
+
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)

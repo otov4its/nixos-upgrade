@@ -44,6 +44,8 @@
   through `nix flake check`.
 * Make standard-stream detection safe when a stream is unavailable, and handle
   optional subprocess output explicitly.
+* Make dynamic module stubs and import-spec handling in Python tests compatible
+  with BasedPyright.
 
 ## 2026-07-01-1.0.5
 
