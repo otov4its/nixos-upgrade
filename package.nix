@@ -69,7 +69,7 @@ stdenvNoCC.mkDerivation rec {
       --replace-fail "@helper@" "${outLibDir}/nixos-upgrade-activate"
 
     substituteInPlace ./lib/nixos-upgrade-activate \
-      --replace-fail "@bash@" "${stdenv.shell}" \
+      --replace-fail "#!/usr/bin/env bash" "#!${stdenv.shell}" \
       --replace-fail "@path@" "${lib.makeBinPath runtimeInputs}"
   '';
 
@@ -109,9 +109,23 @@ stdenvNoCC.mkDerivation rec {
     ${stdenv.shellDryRun} ${outBin}
     shellcheck ${outBin}
 
+    expected_launcher_shebang="#!${stdenv.shell}"
+    IFS= read -r actual_launcher_shebang < "${outBin}"
+    if [[ "$actual_launcher_shebang" != "$expected_launcher_shebang" ]]; then
+      printf 'launcher shebang is not pinned to stdenv.shell\n' >&2
+      exit 1
+    fi
 
     ${stdenv.shellDryRun} "${outLibDir}/nixos-upgrade-activate"
     shellcheck --shell=bash ${outLibDir}/nixos-upgrade-activate
+    shellcheck --shell=bash "${src}/lib/nixos-upgrade-activate"
+
+    expected_activation_shebang="#!${stdenv.shell}"
+    IFS= read -r actual_activation_shebang < "${outLibDir}/nixos-upgrade-activate"
+    if [[ "$actual_activation_shebang" != "$expected_activation_shebang" ]]; then
+      printf 'activation helper shebang is not pinned to stdenv.shell\n' >&2
+      exit 1
+    fi
 
     pyflakes ${outLibDir}
 

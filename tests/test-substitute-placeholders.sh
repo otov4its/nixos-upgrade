@@ -31,7 +31,6 @@ for placeholder in \
   '@man@' \
   '@path@' \
   '@helper@' \
-  '@bash@' \
   '@pyfile@' \
   '@py_opts@'
 do
