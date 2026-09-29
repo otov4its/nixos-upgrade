@@ -374,17 +374,18 @@ Python output keeps its original destination while the spinner runs.
 
 ## C. Nits
 
-* `is_output_colored(self) -> (bool, bool)` is not a valid annotation
-  (`tuple[bool, bool]`); `env_to_update: dict = {}` mutable default
-  (`nixos-upgrade.py:317, 147`).
-* `TERM_CORE_SIGS` spawns ~40 `kill -l` subshells on every start; make it a
-  static list.
-* `DROP_PRIV` (`bin/nixos-upgrade:20-21`): add `--no-new-privs` and
-  `--bounding-set=-all` for cheap hardening.
-* `process_diff` (`nixos-upgrade.py:540-541`) drops "the first 2 lines" of
-  nvd output; comment the coupling to nvd's format.
-* `OK` / `ERR` / `EXIT` / `PONG` are duplicated as literals on both sides of
-  the protocol.
+* `TERM_CORE_SIGS` performs 10 command substitutions using Bash's built-in
+  `kill -l` on startup, not ~40 external `kill` invocations. This is likely a
+  negligible cost; retaining dynamic signal-number lookup avoids hardcoding
+  platform-specific values, so optimize only if startup profiling justifies it.
+* `nvd.format_diff` (`src/lib/nvd.py:51-52`) removes the first two lines of
+  NVD output. This depends on NVD's output format; document that assumption.
+  `tests/test_nvd.py` already covers the current two-line-header behavior.
+* Activation-result status values are maintained in both Python
+  (`src/lib/activation.py`: `Literal` aliases and parser allow-lists) and the
+  Bash helper (`src/lib/nixos-upgrade-activate`). Keep the JSON protocol values
+  in sync; Python's runtime allow-lists could be derived from the `Literal`
+  aliases to avoid duplicating them there.
 
 ---
 

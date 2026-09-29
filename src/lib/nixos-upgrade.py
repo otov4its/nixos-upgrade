@@ -146,7 +146,7 @@ class CliProgram:
                 *,
                 stderr_out=False, with_spinner=True, exit_on_error=True,
                 msg_on_success_loglevel=logging.INFO,
-                env_to_update: dict = {},
+                env_to_update: typing.Mapping[str, str] | None = None,
                 **kwargs) -> subprocess.CompletedProcess[str]:
         stderr_out = self.debug_mode or stderr_out
 
@@ -169,7 +169,7 @@ class CliProgram:
         if no_color:
             env[self.NO_COLOR_ENV_NAME] = "1"
 
-        if env_to_update:
+        if env_to_update is not None:
             env.update(env_to_update)
 
         proc = subprocess.Popen(
@@ -324,7 +324,7 @@ class CliProgram:
         return self.args.colored_stderr
 
     # returns -> (stdout_colored: bool, stderr_colored: bool)
-    def is_output_colored(self) -> (bool, bool):
+    def is_output_colored(self) -> tuple[bool, bool]:
         if "FORCE_COLOR" in os.environ:
             return (True, True)
 
