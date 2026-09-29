@@ -374,15 +374,7 @@ Python output keeps its original destination while the spinner runs.
 
 ## C. Nits
 
-* `TERM_CORE_SIGS` performs 10 command substitutions using Bash's built-in
-  `kill -l` on startup, not ~40 external `kill` invocations. This is likely a
-  negligible cost; retaining dynamic signal-number lookup avoids hardcoding
-  platform-specific values, so optimize only if startup profiling justifies it.
-* Activation-result status values are maintained in both Python
-  (`src/lib/activation.py`: `Literal` aliases and parser allow-lists) and the
-  Bash helper (`src/lib/nixos-upgrade-activate`). Keep the JSON protocol values
-  in sync; Python's runtime allow-lists could be derived from the `Literal`
-  aliases to avoid duplicating them there.
+No outstanding minor issues identified.
 
 ---
 

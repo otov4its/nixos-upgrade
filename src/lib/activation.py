@@ -1,7 +1,7 @@
 import base64
 import json
 from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, get_args
 
 
 HELPER_PATH = "@helper@"
@@ -108,22 +108,9 @@ def parse_activation_result(stdout: str, returncode: int) -> ActivationResult:
     if not all(isinstance(status, str) for status in (system, lock, commit)):
         raise ValueError("activation result statuses must be strings")
 
-    system_statuses = {
-        "switched",
-        "invalid-request",
-        "stale",
-        "profile-failed",
-        "switch-failed",
-    }
-    lock_statuses = {"published", "not-requested", "failed", "not-run"}
-    commit_statuses = {
-        "committed",
-        "no-changes",
-        "not-git",
-        "not-requested",
-        "failed",
-        "not-run",
-    }
+    system_statuses = get_args(SystemStatus)
+    lock_statuses = get_args(LockStatus)
+    commit_statuses = get_args(CommitStatus)
 
     if system not in system_statuses:
         raise ValueError(f"unknown activation system status: {system!r}")
