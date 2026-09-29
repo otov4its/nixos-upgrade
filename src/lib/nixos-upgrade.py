@@ -495,6 +495,7 @@ class CliProgram:
             command,
             "updating flake lock file...",
             exit_on_error=False,
+            stderr_out=True,
         )
 
         if update.returncode != 0 or not self.lock_file_path.is_file():
@@ -525,6 +526,7 @@ class CliProgram:
             command,
             "building nixos system...",
             exit_on_error=False,
+            stderr_out=True,
         )
         if build.returncode != 0:
             self.exit_with_error(
