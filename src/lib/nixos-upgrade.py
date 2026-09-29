@@ -672,7 +672,7 @@ class CliProgram:
 
         self.logger.warning(prompt + answer)
 
-        if answer.upper() == 'Y':
+        if answer.strip().casefold() in {'y', 'yes'}:
             self.logger.info("switching to upgraded system...")
             result = self.run_privileged_activation()
 

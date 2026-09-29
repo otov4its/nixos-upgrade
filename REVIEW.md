@@ -367,8 +367,6 @@ Python output keeps its original destination while the spinner runs.
 * Make `--help` single-source: render the man page to plain text at build
   time and `cat` it, instead of `man --pager=cat … | head -n -4 | tail -n +3`
   (`bin/nixos-upgrade:82`).
-* Accept `yes`, not only `y` (`nixos-upgrade.py:629`).
-* README: `nix profile install` → `nix profile add`; "NixOs" → "NixOS".
 
 ---
 
