@@ -39,6 +39,11 @@
 * Skip Python bytecode compilation in the development package while retaining
   optimized bytecode in the default package.
 * Run `statix` and `deadnix` in the flake's checks.
+* Replace Pylsp/Pyflakes with Ruff and BasedPyright, and run Python lint/type
+  checks, unit tests, shell regressions, ShellCheck, and bytecode-policy checks
+  through `nix flake check`.
+* Make standard-stream detection safe when a stream is unavailable, and handle
+  optional subprocess output explicitly.
 
 ## 2026-07-01-1.0.5
 

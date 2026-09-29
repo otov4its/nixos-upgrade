@@ -7,10 +7,17 @@ set -o pipefail
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly PROJECT_ROOT
 
-DEFAULT_OUT="$(nix build --no-link --print-out-paths "$PROJECT_ROOT#default")"
-readonly DEFAULT_OUT
-DEV_OUT="$(nix build --no-link --print-out-paths "$PROJECT_ROOT#dev")"
-readonly DEV_OUT
+if (($# == 0)); then
+  DEFAULT_OUT="$(nix build --no-link --print-out-paths "$PROJECT_ROOT#default")"
+  DEV_OUT="$(nix build --no-link --print-out-paths "$PROJECT_ROOT#dev")"
+elif (($# == 2)); then
+  DEFAULT_OUT=$1
+  DEV_OUT=$2
+else
+  printf 'usage: %s [DEFAULT_OUT DEV_OUT]\n' "${BASH_SOURCE[0]}" >&2
+  exit 2
+fi
+readonly DEFAULT_OUT DEV_OUT
 
 test -d "$DEFAULT_OUT/lib"
 test -d "$DEV_OUT/lib"

@@ -24,6 +24,10 @@ import yaspin
 import yaspin.spinners
 
 
+def stream_is_tty(stream: typing.TextIO | None) -> bool:
+    return stream is not None and os.isatty(stream.fileno())
+
+
 class ColorOption(enum.StrEnum):
     AUTO = enum.auto()
     ALWAYS = enum.auto()
@@ -35,9 +39,9 @@ class CliProgram:
     VERSION = os.environ.get("VERSION", "development")
     NIXOS_FLAKE_DEFAULT_PATH = "/etc/nixos/"
     FLAKE_LOCK = "flake.lock"
-    STDIN_IS_A_TTY = os.isatty(sys.__stdin__.fileno())
-    STDOUT_IS_A_TTY = os.isatty(sys.__stdout__.fileno())
-    STDERR_IS_A_TTY = os.isatty(sys.__stderr__.fileno())
+    STDIN_IS_A_TTY = stream_is_tty(sys.__stdin__)
+    STDOUT_IS_A_TTY = stream_is_tty(sys.__stdout__)
+    STDERR_IS_A_TTY = stream_is_tty(sys.__stderr__)
     HOSTNAME = socket.gethostname()
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
@@ -78,7 +82,7 @@ class CliProgram:
         self.spinner = self.get_spinner()
         self.current_system_closure = self.get_current_system_closure()
         self.upgraded_system_closure = None
-        self.diff = None
+        self.diff = ""
         self.setup_signals()
         self.setup_excepthook()
 
@@ -212,7 +216,11 @@ class CliProgram:
 
         self.running_subproc = proc
 
-        os.set_blocking(proc.stdout.fileno(), False)
+        stdout = proc.stdout
+        if stdout is None:
+            raise RuntimeError("subprocess stdout pipe was not created")
+
+        os.set_blocking(stdout.fileno(), False)
 
         stdout_data = ""
         while proc.poll() is None:
@@ -220,7 +228,7 @@ class CliProgram:
             # it's possible that a signal is received
             synsignals.handle()
 
-            while line := proc.stdout.readline():
+            while line := stdout.readline():
                 if no_color:
                     line = self.clear_color(line)
                 stdout_data += line
@@ -234,7 +242,7 @@ class CliProgram:
 
         self.spinner_stop()
 
-        tail = proc.stdout.read()
+        tail = stdout.read()
         if no_color:
             tail = self.clear_color(tail)
         stdout_data += tail
@@ -431,14 +439,17 @@ class CliProgram:
                 stream=sys.stderr,
             )
 
-    def spinner_start(self, color="green"):
-        if self.has_spinner:
-            self.spinner.color = color if self.colored_stderr else None
-            self.spinner.start()
+    def spinner_start(self, color: str = "green"):
+        spinner = getattr(self, "spinner", None)
+        if spinner is not None:
+            if self.colored_stderr:
+                spinner.color = color
+            spinner.start()
 
     def spinner_stop(self):
-        if self.has_spinner:
-            self.spinner.stop()
+        spinner = getattr(self, "spinner", None)
+        if spinner is not None:
+            spinner.stop()
 
     def config_verbosity(self, logger):
         match self.args.verbosity:
@@ -503,7 +514,9 @@ class CliProgram:
     def exit_with_success(self, msg=None) -> typing.NoReturn:
         self.exit(os.EX_OK, msg, None)
 
-    def exit(self, code: int, msg=None, level=logging.INFO) -> typing.NoReturn:
+    def exit(
+        self, code: int, msg=None, level: int | None = logging.INFO
+    ) -> typing.NoReturn:
         self.spinner_stop()
 
         if msg and level:
@@ -617,7 +630,7 @@ class CliProgram:
                 str(self.upgraded_system_closure)],
             "Comparing derivations...",
         )
-        self.diff = diff.stdout
+        self.diff = diff.stdout or ""
 
         if self.has_pkgs_changes():
             self.logger.warning("package changes found")

@@ -48,17 +48,12 @@
     ];
 
     pythonDevTools = [
-      pythonPackages.pyflakes
-      pythonPackages.rope
+      pkgs.basedpyright
+      pkgs.ruff
       pythonPackages.yapf
-      pythonPackages.mccabe
-      pythonPackages.pycodestyle
     ];
 
     devShellInputs = with pkgs; [
-      # pylsp...
-      pythonPackages.python-lsp-server
-
       # Nix LSP
       nil
       nixd
@@ -110,8 +105,7 @@
       };
     };
 
-    checks = if system == "x86_64-linux" then
-      let
+    checks = let
         basePkgs = import nixpkgs { inherit system; };
         overlayPkgs = basePkgs.extend self.overlays.default;
         containsDrv = drvPath: packages:
@@ -176,7 +170,63 @@
           touch $out
         '';
 
-        sudo-activation = basePkgs.callPackage ./tests/sudo-activation-vm.nix { };
+        python-lint = basePkgs.runCommand "nixos-upgrade-python-lint" {
+          nativeBuildInputs = [ basePkgs.ruff ];
+        } ''
+          cd ${self.outPath}
+          ruff check --no-cache src/lib tests
+          touch $out
+        '';
+
+        python-type-check = basePkgs.runCommand "nixos-upgrade-python-type-check" {
+          nativeBuildInputs = [ basePkgs.basedpyright pythonWithPkgs ];
+        } ''
+          cd ${self.outPath}
+          basedpyright src/lib
+          touch $out
+        '';
+
+        shell-regression-tests = basePkgs.runCommand "nixos-upgrade-shell-regression-tests" {
+          nativeBuildInputs = [
+            basePkgs.bash
+            basePkgs.coreutils
+            basePkgs.findutils
+            basePkgs.gawk
+            basePkgs.gnugrep
+            basePkgs.gnused
+            pythonWithPkgs
+          ];
+        } ''
+          cd ${self.outPath}
+          for test in tests/*.sh; do
+            case "$test" in
+              tests/test-python-bytecode-policy.sh) continue ;;
+            esac
+            bash "$test"
+          done
+          touch $out
+        '';
+
+        shell-static-analysis = basePkgs.runCommand "nixos-upgrade-shell-static-analysis" {
+          nativeBuildInputs = [ basePkgs.shellcheck ];
+        } ''
+          cd ${self.outPath}
+          shellcheck --shell=bash \
+            src/bin/nixos-upgrade \
+            src/lib/nixos-upgrade-activate \
+            tests/*.sh
+          touch $out
+        '';
+
+        python-bytecode-policy = basePkgs.runCommand "nixos-upgrade-python-bytecode-policy" {
+          nativeBuildInputs = [ basePkgs.bash basePkgs.findutils basePkgs.gnugrep ];
+        } ''
+          cd ${self.outPath}
+          bash tests/test-python-bytecode-policy.sh \
+            "${self.packages.${system}.default}" \
+            "${self.packages.${system}.dev}"
+          touch $out
+        '';
 
         nix-static-analysis = basePkgs.runCommand "nixos-upgrade-nix-static-analysis" {
           nativeBuildInputs = [ basePkgs.statix basePkgs.deadnix ];
@@ -228,8 +278,9 @@
             == explicitPkgs.nixos-upgrade.drvPath;
           basePkgs.runCommand "nixos-upgrade-nixos-module-check" { }
             "touch $out";
-      }
-    else { };
+      } // nixpkgs.lib.optionalAttrs (system == "x86_64-linux") {
+        sudo-activation = basePkgs.callPackage ./tests/sudo-activation-vm.nix { };
+      };
   }) // rec {
     overlays.default = nixosUpgradeOverlay;
 

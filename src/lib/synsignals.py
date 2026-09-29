@@ -1,10 +1,10 @@
 import signal
-from typing import Callable
+from typing import Any, Callable
 import contextlib
 
 
-_signals = None
-_signums = None
+_signals: dict[int, Any] | None = None
+_signums: tuple[int, ...] = ()
 _pending_signals = []
 _handling_blocked = False
 
@@ -51,7 +51,11 @@ def preserve_never(signum: int) -> bool:
     return False
 
 
-def set(signals: dict, *, preserve_handler: PreserveHandler = preserve_if_not_dfl):
+def set(
+    signals: dict[int, Any],
+    *,
+    preserve_handler: PreserveHandler = preserve_if_not_dfl,
+):
     global _signals, _signums
 
     if not signals:
@@ -61,7 +65,7 @@ def set(signals: dict, *, preserve_handler: PreserveHandler = preserve_if_not_df
     if _signals is not None:
         raise ValueError("Signals can only be set once")
 
-    signums = signals.keys()
+    signums = tuple(signals)
 
     # Block signals before setting handler
     signal.pthread_sigmask(signal.SIG_BLOCK, signums)
@@ -90,7 +94,7 @@ def add_handling(func):
 
 
 def handle():
-    if _handling_blocked:
+    if _handling_blocked or _signals is None:
         return
 
     _block()

@@ -41,6 +41,9 @@ with mock.patch.dict(sys.modules, {
 
 
 class CliStartupTests(unittest.TestCase):
+    def test_missing_standard_stream_is_not_a_tty(self):
+        self.assertFalse(module.stream_is_tty(None))
+
     def test_configuration_option_accepts_short_and_long_forms(self):
         for option in ("-C", "--configuration"):
             with self.subTest(option=option):

@@ -1,5 +1,5 @@
 { lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, coreutils,
-  glibc, getent, util-linux, jq, shellcheck,
+  glibc, getent, util-linux, jq, shellcheck, ruff,
   pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never",
   compilePythonBytecode ? true }:
 
@@ -18,8 +18,6 @@ let
     yaspin
     termcolor
   ]);
-  pythonPackages = python3.pkgs;
-
   runtimeInputs = [
     pythonWithPkgs
     git
@@ -32,13 +30,6 @@ let
     jq
   ];
 
-  pythonDevTools = [
-    pythonPackages.pyflakes
-    pythonPackages.rope
-    pythonPackages.yapf
-    pythonPackages.mccabe
-    pythonPackages.pycodestyle
-  ];
 in
 stdenvNoCC.mkDerivation rec {
   pname = name;
@@ -99,7 +90,7 @@ stdenvNoCC.mkDerivation rec {
   '';
 
   doInstallCheck = true;
-  nativeInstallCheckInputs = [ shellcheck ] ++ pythonDevTools;
+  nativeInstallCheckInputs = [ shellcheck ruff ];
   installCheckPhase = ''
     runHook preCheck
 
@@ -124,7 +115,7 @@ stdenvNoCC.mkDerivation rec {
       exit 1
     fi
 
-    pyflakes ${outLibDir}
+    ruff check --no-cache --isolated --select E4,E7,E9,F ${outLibDir}
 
     runHook postCheck
   '';

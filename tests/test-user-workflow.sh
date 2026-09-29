@@ -27,12 +27,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+write_fake_command() {
+  local command_path=$1
+  printf '#!%s\n' "$BASH" > "$command_path"
+  cat >> "$command_path"
+  chmod +x "$command_path"
+}
+
 mkdir --parents "$RUNTIME_DIR" "$FAKE_BIN" "$FLAKE_DIR" "$CURRENT_SYSTEM" "$NEW_SYSTEM"
 printf 'flake source\n' > "$FLAKE_DIR/flake.nix"
 printf 'original lock\n' > "$FLAKE_DIR/flake.lock"
 
-cat > "$FAKE_BIN/nix" <<'EOF'
-#!/usr/bin/env bash
+write_fake_command "$FAKE_BIN/nix" <<'EOF'
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -137,10 +143,8 @@ fi
 printf 'unexpected fake nix invocation\n' >&2
 exit 83
 EOF
-chmod +x "$FAKE_BIN/nix"
 
-cat > "$FAKE_BIN/nvd" <<'EOF'
-#!/usr/bin/env bash
+write_fake_command "$FAKE_BIN/nvd" <<'EOF'
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -149,10 +153,8 @@ set -o pipefail
 printf 'nvd\n' >> "$TEST_EVENT_LOG"
 printf 'Comparing system closures\nPackages\n[A.] added-package\n'
 EOF
-chmod +x "$FAKE_BIN/nvd"
 
-cat > "$FAKE_SUDO" <<'EOF'
-#!/usr/bin/env bash
+write_fake_command "$FAKE_SUDO" <<'EOF'
 set -o errexit
 set -o nounset
 set -o pipefail
@@ -164,7 +166,6 @@ if [[ "${TEST_SUDO_DENIED:-0}" == 1 ]]; then
 fi
 printf '%s\n' "$TEST_SUDO_RESULT"
 EOF
-chmod +x "$FAKE_SUDO"
 
 export PATH="$FAKE_BIN:$PATH"
 export TEST_EVENT_LOG="$EVENT_LOG"

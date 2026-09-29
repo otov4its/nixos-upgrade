@@ -81,12 +81,14 @@ owner.
    `colorformatter.py`, and `synsignals.py`), so any further split should be
    incremental and preserve the tested workflow. A recent diagnostic reports
    `run_cmd` at cyclomatic complexity 15.
-2. **B.7 — complete the automated quality gates.** Python unit tests and a
-   NixOS sudo-activation VM check exist. Shell regression scripts are present
-   under `tests/` but are not invoked by the flake checks. `package.nix` runs
-   ShellCheck and Pyflakes in its install check; `pycodestyle` and `mccabe` are
-   available as development tools but are not run there. Decide which of these
-   should be required by `nix flake check` and wire them in accordingly.
+2. **B.7 — decide whether to expand Python lint/type policies.** Flake checks
+   now run Ruff over source and tests, BasedPyright in basic mode over
+   `src/lib`, the shell regression suite, ShellCheck, and the default/dev
+   bytecode policy test. Python unit, Nix static-analysis, module-evaluation,
+   and sudo-activation checks remain. Portable checks are configured for both
+   Linux systems; the sudo-activation VM remains x86_64-only. Ruff's initial
+   rule set is intentionally conservative; formatting and additional
+   style/complexity rules can be considered separately.
 
 ## Review-file maintenance
 

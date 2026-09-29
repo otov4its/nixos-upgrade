@@ -6,11 +6,8 @@
   "languages": {
     "Python": {
       "language_servers": [
-        // Enable pylsp
-        "pylsp",
-        // Disable other registered language
-        // servers (ty, ruff, pyright, basedpyright)
-        "!..."
+        "basedpyright",
+        "ruff"
       ]
     }
   }

@@ -31,11 +31,15 @@ if [[ "$commit_block" != *'--porcelain --untracked-files=no'* ]]; then
   exit 1
 fi
 
+# These patterns intentionally match literal source text.
+# shellcheck disable=SC2016
 if [[ "$owner_block" != *'HOME=$home'* || "$owner_block" != *'runuser --user'* ]]; then
   printf 'owner commands must run with the repository owner credentials and HOME\n' >&2
   exit 1
 fi
 
+# This pattern intentionally matches literal source text.
+# shellcheck disable=SC2016
 if ! grep --fixed-strings --quiet -- 'lookup_owner_account "$git_uid"' "$HELPER"; then
   printf 'auto-commit must select the Git-directory owner\n' >&2
   exit 1
