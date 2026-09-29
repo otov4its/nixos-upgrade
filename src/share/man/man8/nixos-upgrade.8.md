@@ -39,7 +39,11 @@ upgrade confirmation but does not bypass sudo authorization.
   current hostname).
 
 `-u, --no-update-lock-file`
-: do not update flake.lock
+: do not update flake.lock; mutually exclusive with `--inputs`
+
+`--inputs` *NAME*...
+: update only the named flake inputs (default: update all). Mutually exclusive
+  with `-u, --no-update-lock-file`.
 
 `-m` *MESSAGE*, `--commit-message=`*MESSAGE*
 : add a commit message

@@ -51,6 +51,7 @@ if [[ "$1" == flake && "$2" == update ]]; then
   shift 2
   flake_dir=
   lock_file=
+  inputs=()
   while (($#)); do
     case "$1" in
       --flake)
@@ -62,11 +63,16 @@ if [[ "$1" == flake && "$2" == update ]]; then
         shift 2
         ;;
       *)
-        printf 'unexpected nix flake update argument: %s\n' "$1" >&2
-        exit 81
+        inputs+=("$1")
+        shift
         ;;
     esac
   done
+  expected_inputs=()
+  if [[ -n "${TEST_EXPECTED_INPUTS:-}" ]]; then
+    read -r -a expected_inputs <<< "$TEST_EXPECTED_INPUTS"
+  fi
+  [[ "${inputs[*]}" == "${expected_inputs[*]}" ]]
   [[ "$flake_dir" == "$TEST_FLAKE_DIR" ]]
   [[ "$lock_file" != "$TEST_FLAKE_DIR/flake.lock" ]]
   [[ -n "$lock_file" ]]
@@ -224,8 +230,10 @@ export TEST_BUILD_FAILURE=0
 export TEST_SUDO_DENIED=0
 export TEST_SUDO_RESULT='{"system":"switched","lock":"failed","commit":"failed"}'
 reset_records
-if TEST_EXPECTED_CONFIGURATION=test-configuration run_app \
-  --flake "$FLAKE_DIR" -C test-configuration --assume-no --color=never \
+if TEST_EXPECTED_CONFIGURATION=test-configuration \
+  TEST_EXPECTED_INPUTS='nixpkgs home-manager' run_app \
+  --flake "$FLAKE_DIR" -C test-configuration \
+  --inputs nixpkgs home-manager --assume-no --color=never \
   > "$TEST_ROOT/decline.out" 2> "$TEST_ROOT/decline.err"; then
   :
 else

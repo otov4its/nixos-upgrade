@@ -4,6 +4,8 @@
 
 * Add `-C, --configuration NAME` to select a NixOS flake configuration; default
   to the current hostname.
+* Add `--inputs NAME [NAME ...]` to update selected flake inputs; omitting it
+  still updates all inputs, and it conflicts with `--no-update-lock-file`.
 * Delegate CLI parsing and the per-user singleton lock to Python; keep the
   Bash launcher focused on runtime setup and blocking signals before Python
   starts.

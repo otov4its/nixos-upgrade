@@ -67,6 +67,27 @@ class CliStartupTests(unittest.TestCase):
             module.CliProgram.HOSTNAME,
         )
 
+    def test_inputs_option_collects_input_names(self):
+        program = object.__new__(module.CliProgram)
+        with mock.patch.object(
+            sys,
+            "argv",
+            [module.CliProgram.NAME, "--inputs", "nixpkgs", "home-manager"],
+        ):
+            args = program.parse_args()
+
+        self.assertEqual(
+            getattr(args, "inputs", None),
+            ["nixpkgs", "home-manager"],
+        )
+
+    def test_inputs_default_to_updating_all_inputs(self):
+        program = object.__new__(module.CliProgram)
+        with mock.patch.object(sys, "argv", [module.CliProgram.NAME]):
+            args = program.parse_args()
+
+        self.assertIsNone(getattr(args, "inputs", None))
+
     def make_args(self):
         return types.SimpleNamespace(
             _error=None,

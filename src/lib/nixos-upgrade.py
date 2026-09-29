@@ -296,8 +296,18 @@ class CliProgram:
             default=self.HOSTNAME,
         )
 
-        parser.add_argument('-u', '--no-update-lock-file', action='store_true',
-                            help=f"do not update {self.FLAKE_LOCK}")
+        lock_update_group = parser.add_mutually_exclusive_group()
+        lock_update_group.add_argument(
+            '-u', '--no-update-lock-file',
+            action='store_true',
+            help=f"do not update {self.FLAKE_LOCK}",
+        )
+        lock_update_group.add_argument(
+            '--inputs',
+            metavar='NAME',
+            nargs='+',
+            help="update only the named flake inputs (default: update all)",
+        )
 
         parser.add_argument('-m', '--commit-message',
                             help="add a commit message",
@@ -532,11 +542,15 @@ class CliProgram:
             *self.NIX_EXTRA_EXPERIMENTAL_FEATURES,
             "flake",
             "update",
+        ]
+        if self.args.inputs:
+            command.extend(self.args.inputs)
+        command.extend([
             "--flake",
             str(self.args.flake),
             "--output-lock-file",
             str(self.lock_file_path),
-        ]
+        ])
         update = self.run_cmd(
             command,
             "updating flake lock file...",

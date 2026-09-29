@@ -29,3 +29,15 @@ test "$status" -eq 64
 grep -Fq "not allowed with argument" "$STDERR_FILE"
 
 printf 'ok: conflicting assume-yes/assume-no options are rejected\n'
+
+set +o errexit
+NAME=nixos-upgrade-test \
+TERM_CORE_SIGS="" \
+python3 "$PYTHON_FILE" --color=never --no-update-lock-file \
+  --inputs nixpkgs 2>"$STDERR_FILE"
+status=$?
+set -o errexit
+
+test "$status" -eq 64
+grep -Fq "not allowed with argument" "$STDERR_FILE"
+printf 'ok: --inputs conflicts with --no-update-lock-file\n'

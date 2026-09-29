@@ -361,9 +361,9 @@ Python output keeps its original destination while the spinner runs.
 
 * **Implemented:** select a configuration with `-C, --configuration NAME`;
   it defaults to the current hostname. `--flake` remains a directory path.
-* **Still open:** consider selective flake input updates, for example allowing
-  `nixos-upgrade nixpkgs home-manager`. `update_lock_file()` currently invokes
-  `nix flake update` without input names, so it updates all flake inputs.
+* **Implemented:** select flake inputs to update with
+  `--inputs NAME [NAME ...]`. Omitting the option still updates all inputs;
+  it cannot be combined with `--no-update-lock-file`.
 
 ---
 
