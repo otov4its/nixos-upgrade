@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Add `-C, --configuration NAME` to select a NixOS flake configuration; default
+  to the current hostname.
 * Delegate CLI parsing and the per-user singleton lock to Python; keep the
   Bash launcher focused on runtime setup and blocking signals before Python
   starts.

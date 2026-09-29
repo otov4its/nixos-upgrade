@@ -39,8 +39,6 @@ class CliProgram:
     STDOUT_IS_A_TTY = os.isatty(sys.__stdout__.fileno())
     STDERR_IS_A_TTY = os.isatty(sys.__stderr__.fileno())
     HOSTNAME = socket.gethostname()
-    NIXOS_CONFIG_FLAKE_OUT = \
-        f"nixosConfigurations.{HOSTNAME}.config.system.build.toplevel"
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
     POLLING_PROC_SECS = 0.1
@@ -282,11 +280,21 @@ class CliProgram:
             version=self.VERSION,
         )
 
-        parser.add_argument('--flake',
-                            help=f"Nixos flake dir \
-                                (default: {self.NIXOS_FLAKE_DEFAULT_PATH})",
-                            default=self.NIXOS_FLAKE_DEFAULT_PATH,
-                            type=pathlib.Path)
+        parser.add_argument(
+            '--flake',
+            help=("Nixos flake dir "
+                  f"(default: {self.NIXOS_FLAKE_DEFAULT_PATH})"),
+            default=self.NIXOS_FLAKE_DEFAULT_PATH,
+            type=pathlib.Path,
+        )
+
+        parser.add_argument(
+            '-C', '--configuration',
+            metavar='NAME',
+            help=("NixOS configuration to build "
+                  f"(default: {self.HOSTNAME})"),
+            default=self.HOSTNAME,
+        )
 
         parser.add_argument('-u', '--no-update-lock-file', action='store_true',
                             help=f"do not update {self.FLAKE_LOCK}")
@@ -541,8 +549,10 @@ class CliProgram:
 
     @synsignals.add_handling
     def build_nixos_system(self):
-        nixos_config = (f"{self.args.flake}#"
-                        f"{self.NIXOS_CONFIG_FLAKE_OUT}")
+        nixos_config = (
+            f"{self.args.flake}#nixosConfigurations."
+            f"{self.args.configuration}.config.system.build.toplevel"
+        )
         self.logger.debug(f"{nixos_config=}")
 
         command = [

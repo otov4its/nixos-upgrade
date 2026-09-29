@@ -34,6 +34,10 @@ upgrade confirmation but does not bypass sudo authorization.
   inside a Git repository, Nix uses files indexed by Git; add new files to the
   index before upgrading.
 
+`-C` *NAME*, `--configuration=`*NAME*
+: select a configuration under `nixosConfigurations` to build (default: the
+  current hostname).
+
 `-u, --no-update-lock-file`
 : do not update flake.lock
 

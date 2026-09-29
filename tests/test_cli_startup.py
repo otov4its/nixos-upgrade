@@ -41,6 +41,32 @@ with mock.patch.dict(sys.modules, {
 
 
 class CliStartupTests(unittest.TestCase):
+    def test_configuration_option_accepts_short_and_long_forms(self):
+        for option in ("-C", "--configuration"):
+            with self.subTest(option=option):
+                program = object.__new__(module.CliProgram)
+                with mock.patch.object(
+                    sys,
+                    "argv",
+                    [module.CliProgram.NAME, option, "test-configuration"],
+                ):
+                    args = program.parse_args()
+
+                self.assertEqual(
+                    getattr(args, "configuration", None),
+                    "test-configuration",
+                )
+
+    def test_configuration_defaults_to_hostname(self):
+        program = object.__new__(module.CliProgram)
+        with mock.patch.object(sys, "argv", [module.CliProgram.NAME]):
+            args = program.parse_args()
+
+        self.assertEqual(
+            getattr(args, "configuration", None),
+            module.CliProgram.HOSTNAME,
+        )
+
     def make_args(self):
         return types.SimpleNamespace(
             _error=None,

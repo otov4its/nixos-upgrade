@@ -106,7 +106,11 @@ if [[ "$1" == build ]]; then
     esac
   done
   [[ "$no_write" == true ]]
-  [[ "$config" == "$TEST_FLAKE_DIR"#nixosConfigurations.* ]]
+  if [[ -n "${TEST_EXPECTED_CONFIGURATION:-}" ]]; then
+    [[ "$config" == "$TEST_FLAKE_DIR#nixosConfigurations.$TEST_EXPECTED_CONFIGURATION.config.system.build.toplevel" ]]
+  else
+    [[ "$config" == "$TEST_FLAKE_DIR"#nixosConfigurations.* ]]
+  fi
   [[ -n "$reference_lock" && -f "$reference_lock" ]]
   if [[ "${TEST_EXPECT_NO_UPDATE:-0}" == 1 ]]; then
     [[ "$(cat "$reference_lock")" == 'original lock' ]]
@@ -220,7 +224,8 @@ export TEST_BUILD_FAILURE=0
 export TEST_SUDO_DENIED=0
 export TEST_SUDO_RESULT='{"system":"switched","lock":"failed","commit":"failed"}'
 reset_records
-if run_app --flake "$FLAKE_DIR" --assume-no --color=never \
+if TEST_EXPECTED_CONFIGURATION=test-configuration run_app \
+  --flake "$FLAKE_DIR" -C test-configuration --assume-no --color=never \
   > "$TEST_ROOT/decline.out" 2> "$TEST_ROOT/decline.err"; then
   :
 else
