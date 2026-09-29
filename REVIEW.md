@@ -359,11 +359,11 @@ Python output keeps its original destination while the spinner runs.
 
 ### B.9 CLI / UX
 
-* Accept `--flake DIR[#NAME]` like `nixos-rebuild`; today the attribute is
-  hostname-only (`nixos-upgrade.py:36-38`).
-* Allow selective input updates (`nixos-upgrade nixpkgs home-manager`);
-  today `nix flake update` always updates everything
-  (`privileged-worker:137-140`).
+* **Implemented:** select a configuration with `-C, --configuration NAME`;
+  it defaults to the current hostname. `--flake` remains a directory path.
+* **Still open:** consider selective flake input updates, for example allowing
+  `nixos-upgrade nixpkgs home-manager`. `update_lock_file()` currently invokes
+  `nix flake update` without input names, so it updates all flake inputs.
 
 ---
 
