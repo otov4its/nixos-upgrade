@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Use SemVer release versions with date build metadata and `-rc` pre-release
+  versions (for example, `2.0.0-rc+20260929`).
 * Add `-C, --configuration NAME` to select a NixOS flake configuration; default
   to the current hostname.
 * Add `--inputs NAME [NAME ...]` to update selected flake inputs; omitting it

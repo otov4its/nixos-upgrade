@@ -67,6 +67,11 @@ owner.
   handles them at safe points. This is retained intentionally to avoid
   interrupting critical work; the simpler exception-based handler proposed in
   the old B.5 is not the chosen design.
+- **B.8 version convention (accepted):** Use SemVer with the date as build
+  metadata: `X.Y.Z+YYYYMMDD` for a release and `X.Y.Z-rc+YYYYMMDD` for a
+  release candidate (for example, `2.0.0-rc+20260929`). `package.nix` is the
+  package version source; the release checklist requires the matching changelog
+  entry. No Git-derived development version is planned.
 
 ## Remaining follow-ups
 
@@ -82,10 +87,6 @@ owner.
    ShellCheck and Pyflakes in its install check; `pycodestyle` and `mccabe` are
    available as development tools but are not run there. Decide which of these
    should be required by `nix flake check` and wire them in accordingly.
-3. **B.8 — version source (optional maintenance improvement).** The package
-   version and release documentation still need coordinated manual updates.
-   Consider a single version source or generated development versions, but keep
-   the current release scheme if its manual synchronization remains acceptable.
 
 ## Review-file maintenance
 
