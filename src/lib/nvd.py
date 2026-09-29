@@ -49,4 +49,6 @@ def format_change_summary(changes: ChangeCounts) -> str:
 
 
 def format_diff(output: str) -> str:
+    # NVD diff output has a two-line header; keep the slice in sync with
+    # that format.
     return "\n".join(output.split("\n")[2:])
