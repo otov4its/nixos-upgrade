@@ -10,17 +10,19 @@ from nvd import ChangeCounts, count_changes, format_change_summary, format_diff
 class NvdChangeCountTests(unittest.TestCase):
     def test_counts_each_package_change_type_in_plain_output(self):
         changes = count_changes(
-            "[A.] added\n[R.] removed\n[U.] upgraded\n"
-            "[D.] downgraded\n[C.] changed\n"
+            "[A.] added\n[R.] removed\n[U.] upgraded\n[D.] downgraded\n[C.] changed\n"
         )
 
-        self.assertEqual(changes, ChangeCounts(
-            added=1,
-            removed=1,
-            upgraded=1,
-            downgraded=1,
-            changed=1,
-        ))
+        self.assertEqual(
+            changes,
+            ChangeCounts(
+                added=1,
+                removed=1,
+                upgraded=1,
+                downgraded=1,
+                changed=1,
+            ),
+        )
         self.assertEqual(changes.total, 5)
 
     def test_counts_package_changes_in_colored_output(self):

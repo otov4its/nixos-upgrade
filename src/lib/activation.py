@@ -87,10 +87,13 @@ def encode_activation_request(request: ActivationRequest) -> str:
         else None
     )
 
-    return json.dumps({
-        "lock_file_base64": lock_file_base64,
-        "commit_message_base64": commit_message_base64,
-    }, separators=(",", ":"))
+    return json.dumps(
+        {
+            "lock_file_base64": lock_file_base64,
+            "commit_message_base64": commit_message_base64,
+        },
+        separators=(",", ":"),
+    )
 
 
 def parse_activation_result(stdout: str, returncode: int) -> ActivationResult:
@@ -100,7 +103,9 @@ def parse_activation_result(stdout: str, returncode: int) -> ActivationResult:
         raise ValueError("invalid activation result JSON") from error
 
     if not isinstance(result, dict) or set(result) != {"system", "lock", "commit"}:
-        raise ValueError("activation result must contain exactly system, lock, and commit")
+        raise ValueError(
+            "activation result must contain exactly system, lock, and commit"
+        )
 
     system = result["system"]
     lock = result["lock"]

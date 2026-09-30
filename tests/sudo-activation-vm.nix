@@ -139,43 +139,45 @@ let
     nvd = fakeNvd;
   };
 
-  makeClosure = name: mode: delay: pkgs.runCommand name { } ''
-    mkdir -p "$out/bin"
-    cat > "$out/bin/switch-to-configuration" <<'EOF'
-    #!${pkgs.runtimeShell}
-    set -eu
-    test "$1" = switch
-    cat /etc/nixos/flake.lock > /run/nixos-upgrade-test-lock-during-switch
+  makeClosure =
+    name: mode: delay:
+    pkgs.runCommand name { } ''
+      mkdir -p "$out/bin"
+      cat > "$out/bin/switch-to-configuration" <<'EOF'
+      #!${pkgs.runtimeShell}
+      set -eu
+      test "$1" = switch
+      cat /etc/nixos/flake.lock > /run/nixos-upgrade-test-lock-during-switch
 
-    signal_process=$$
-    while [[ "$signal_process" -gt 1 ]]; do
-      signal_parent=1
-      process_ignored=
-      while IFS= read -r status_line; do
-        case "$status_line" in
-          PPid:*) read -r _ signal_parent <<< "$status_line" ;;
-          SigIgn:*) read -r _ process_ignored <<< "$status_line" ;;
-        esac
-      done < "/proc/$signal_process/status"
-      process_name=$(< "/proc/$signal_process/comm")
-      IFS=' ' read -r _ _ _ _ process_group _ < "/proc/$signal_process/stat"
-      printf '%s:%s:%s:%s:%s\n' "$signal_process" "$process_name" "$signal_parent" "$process_ignored" "$process_group" >> /run/nixos-upgrade-test-signal-processes
-      signal_process=$signal_parent
-    done
-    printf 'switch-start\n' >> /run/nixos-upgrade-test-events
-    touch /run/nixos-upgrade-test-switch-started
-    sleep @DELAY@
-    if [[ '@MODE@' == fail ]]; then
-      exit 42
-    fi
-    printf 'switch-complete\n' >> /run/nixos-upgrade-test-events
-    touch /run/nixos-upgrade-test-switched
-    EOF
-    substituteInPlace "$out/bin/switch-to-configuration" \
-      --replace-fail '@MODE@' '${mode}' \
-      --replace-fail '@DELAY@' '${delay}'
-    chmod +x "$out/bin/switch-to-configuration"
-  '';
+      signal_process=$$
+      while [[ "$signal_process" -gt 1 ]]; do
+        signal_parent=1
+        process_ignored=
+        while IFS= read -r status_line; do
+          case "$status_line" in
+            PPid:*) read -r _ signal_parent <<< "$status_line" ;;
+            SigIgn:*) read -r _ process_ignored <<< "$status_line" ;;
+          esac
+        done < "/proc/$signal_process/status"
+        process_name=$(< "/proc/$signal_process/comm")
+        IFS=' ' read -r _ _ _ _ process_group _ < "/proc/$signal_process/stat"
+        printf '%s:%s:%s:%s:%s\n' "$signal_process" "$process_name" "$signal_parent" "$process_ignored" "$process_group" >> /run/nixos-upgrade-test-signal-processes
+        signal_process=$signal_parent
+      done
+      printf 'switch-start\n' >> /run/nixos-upgrade-test-events
+      touch /run/nixos-upgrade-test-switch-started
+      sleep @DELAY@
+      if [[ '@MODE@' == fail ]]; then
+        exit 42
+      fi
+      printf 'switch-complete\n' >> /run/nixos-upgrade-test-events
+      touch /run/nixos-upgrade-test-switched
+      EOF
+      substituteInPlace "$out/bin/switch-to-configuration" \
+        --replace-fail '@MODE@' '${mode}' \
+        --replace-fail '@DELAY@' '${delay}'
+      chmod +x "$out/bin/switch-to-configuration"
+    '';
 
   successfulClosure = makeClosure "nixos-upgrade-test-system" "success" "0.1";
   slowClosure = makeClosure "nixos-upgrade-test-slow-system" "success" "2";

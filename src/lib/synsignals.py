@@ -30,8 +30,7 @@ def preserve_if_not_dfl(signum: int) -> bool:
         # Python by default sets SIGINT handler
         # to `signal.default_int_handler`
         case signal.SIGINT:
-            preserve = (signal.getsignal(signum) !=
-                        signal.default_int_handler)
+            preserve = signal.getsignal(signum) != signal.default_int_handler
         # Python by default sets SIGPIPE handler
         # to `signal.SIG_IGN`
         case signal.SIGPIPE:
@@ -86,10 +85,12 @@ def set(
 
 
 def add_handling(func):
-    ''' Decorator that adds signal handling '''
+    """Decorator that adds signal handling"""
+
     def decorator(*args, **kwargs):
         handle()
         return func(*args, **kwargs)
+
     return decorator
 
 

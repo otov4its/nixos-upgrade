@@ -26,11 +26,14 @@ setattr(yaspin, "yaspin", lambda *args, **kwargs: None)
 spinners = types.ModuleType("yaspin.spinners")
 setattr(yaspin, "spinners", spinners)
 
-with mock.patch.dict(sys.modules, {
-    "termcolor": termcolor,
-    "yaspin": yaspin,
-    "yaspin.spinners": spinners,
-}):
+with mock.patch.dict(
+    sys.modules,
+    {
+        "termcolor": termcolor,
+        "yaspin": yaspin,
+        "yaspin.spinners": spinners,
+    },
+):
     spec = importlib.util.spec_from_file_location(
         "nixos_upgrade_cli_startup_test",
         MODULE_PATH,
@@ -111,7 +114,9 @@ class CliStartupTests(unittest.TestCase):
                 "parse_args",
                 return_value=self.make_args(),
             ),
-            mock.patch.object(module.CliProgram, "get_logger", return_value=mock.Mock()),
+            mock.patch.object(
+                module.CliProgram, "get_logger", return_value=mock.Mock()
+            ),
             mock.patch.object(module.CliProgram, "get_spinner", return_value=None),
             mock.patch.object(
                 module.CliProgram,
@@ -142,7 +147,9 @@ class CliStartupTests(unittest.TestCase):
                     self.assertTrue(lock_file.is_file())
                     with self.assertRaises(SystemExit) as error:
                         self.make_program()
-                    self.assertEqual(error.exception.code, module.CliProgram.EXIT_ERR_CODE)
+                    self.assertEqual(
+                        error.exception.code, module.CliProgram.EXIT_ERR_CODE
+                    )
 
                     os.close(first.singleton_lock_fd)
                     first.singleton_lock_fd = None

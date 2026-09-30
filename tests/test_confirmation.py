@@ -21,11 +21,14 @@ setattr(yaspin, "yaspin", lambda *args, **kwargs: None)
 spinners = types.ModuleType("yaspin.spinners")
 setattr(yaspin, "spinners", spinners)
 
-with mock.patch.dict(sys.modules, {
-    "termcolor": termcolor,
-    "yaspin": yaspin,
-    "yaspin.spinners": spinners,
-}):
+with mock.patch.dict(
+    sys.modules,
+    {
+        "termcolor": termcolor,
+        "yaspin": yaspin,
+        "yaspin.spinners": spinners,
+    },
+):
     spec = importlib.util.spec_from_file_location(
         "nixos_upgrade_confirmation_test",
         MODULE_PATH,

@@ -33,10 +33,12 @@
 ### Task 1: Extract the package expression and publish the shared overlay
 
 **Files:**
+
 - Create: `package.nix`
 - Modify: `flake.nix`
 
 **Interfaces:**
+
 - Produces `overlays.default`, an overlay that adds `nixos-upgrade` using `final.callPackage ./package.nix {}`.
 - Produces `packages.${system}.default`, `.dev`, and `.nixos-upgrade`; standalone package outputs use this flake's pinned Nixpkgs.
 
@@ -109,9 +111,11 @@ git commit -m "nixos-upgrade: expose reusable package overlay"
 ### Task 2: Make the enabled NixOS module use host `pkgs`
 
 **Files:**
+
 - Modify: `flake.nix`
 
 **Interfaces:**
+
 - Consumes `overlays.default` from Task 1.
 - Produces a module default of `pkgs.nixos-upgrade` when `programs.nixos-upgrade.enable = true`.
 - Preserves user overrides, including the pinned standalone package and `null`.
@@ -231,9 +235,11 @@ git commit -m "nixos-upgrade: use host package set in NixOS module"
 ### Task 3: Document package-set selection and run full validation
 
 **Files:**
+
 - Modify: `README.md`
 
 **Interfaces:**
+
 - Documents the existing NixOS module import/enable flow, optional `nixpkgs.follows`, and explicit pinned-package override.
 
 - [ ] **Step 1: Update the NixOS installation example**

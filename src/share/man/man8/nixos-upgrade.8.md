@@ -6,12 +6,15 @@ footer: "@name@ @version@"
 ---
 
 # NAME
+
 @name@ - @description@
 
 # SYNOPSIS
+
 `@name@` [OPTION]...
 
 # DESCRIPTION
+
 Run `@name@` as the invoking user, without `sudo`. Flake preparation, builds,
 diffs, and confirmation run with that user's credentials. Only after a
 positive confirmation does the program invoke its fixed-purpose activation
@@ -23,29 +26,30 @@ time. The package does not install sudoers rules. `--assume-yes` skips the
 upgrade confirmation but does not bypass sudo authorization.
 
 # OPTIONS
+
 `-h, --help`
 : show this help message and exit
 
 `-V, --version`
 : show `@name@` version
 
-`--flake=`*DIR*
-: flake dir with nixos configuration (default: */etc/nixos/*). When *DIR* is
-  inside a Git repository, Nix uses files indexed by Git; add new files to the
-  index before upgrading.
+`--flake=`_DIR_
+: flake dir with nixos configuration (default: _/etc/nixos/_). When _DIR_ is
+inside a Git repository, Nix uses files indexed by Git; add new files to the
+index before upgrading.
 
-`-C` *NAME*, `--configuration=`*NAME*
+`-C` _NAME_, `--configuration=`_NAME_
 : select a configuration under `nixosConfigurations` to build (default: the
-  current hostname).
+current hostname).
 
 `-u, --no-update-lock-file`
 : do not update flake.lock; mutually exclusive with `--inputs`
 
-`--inputs` *NAME*...
+`--inputs` _NAME_...
 : update only the named flake inputs (default: update all). Mutually exclusive
-  with `-u, --no-update-lock-file`.
+with `-u, --no-update-lock-file`.
 
-`-m` *MESSAGE*, `--commit-message=`*MESSAGE*
+`-m` _MESSAGE_, `--commit-message=`_MESSAGE_
 : add a commit message
 
 `-c, --no-commit`
@@ -53,8 +57,8 @@ upgrade confirmation but does not bypass sudo authorization.
 
 `-y, --assume-yes`
 : when a yes/no prompt would be presented, assume that the user entered "y".
-  In particular, suppresses the prompt that appears when upgrading system.
-  Mutually exclusive with `-n, --assume-no`.
+In particular, suppresses the prompt that appears when upgrading system.
+Mutually exclusive with `-n, --assume-no`.
 
 `-n, --assume-no`
 : likewise `--assume-yes`, but no. Mutually exclusive with `-y, --assume-yes`.
@@ -65,8 +69,9 @@ upgrade confirmation but does not bypass sudo authorization.
 `-q, --quiet`
 : decrease verbosity
 
-`--color=`*auto*|*always*|*never*
-: when to display output using colors (default: *auto*)
+`--color=`_auto_|_always_|_never_
+: when to display output using colors (default: _auto_)
 
 # SEE ALSO
-`nixos-rebuild`(8), `nix`(1), `nvd`(1) 
+
+`nixos-rebuild`(8), `nix`(1), `nvd`(1)

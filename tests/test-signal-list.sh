@@ -16,7 +16,7 @@ awk '
   /^function get_term_core_default_action_sigs \{/ { capture=1 }
   capture { print }
   capture && /^}/ { exit }
-' "$BIN_FILE" > "$function_definition_file"
+' "$BIN_FILE" >"$function_definition_file"
 
 # shellcheck disable=SC1090
 source "$function_definition_file"

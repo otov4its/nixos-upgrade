@@ -11,42 +11,17 @@ class ColorFormatter(logging.Formatter):
     __RESET = "__reset"
 
     # Note double `%%` sign for inline color and reset codes
-    COLOR_FORMAT = (
-        f"%(name)s: "
-        f"%%({__COLOR})s%(levelname)s:%%({__RESET})s "
-        f"%(message)s"
-    )
+    COLOR_FORMAT = f"%(name)s: %%({__COLOR})s%(levelname)s:%%({__RESET})s %(message)s"
 
     LEVEL_COLORS = {
-        logging.DEBUG: {
-            "color": "magenta",
-            "on_color": None,
-            "attrs": []
-        },
-        logging.INFO: {
-            "color": "green",
-            "on_color": None,
-            "attrs": []
-        },
-        logging.WARNING: {
-            "color": "yellow",
-            "on_color": None,
-            "attrs": ["bold"]
-        },
-        logging.ERROR: {
-            "color": "red",
-            "on_color": None,
-            "attrs": ["bold"]
-        },
-        logging.CRITICAL: {
-            "color": "light_red",
-            "on_color": None,
-            "attrs": ["bold"]
-        },
+        logging.DEBUG: {"color": "magenta", "on_color": None, "attrs": []},
+        logging.INFO: {"color": "green", "on_color": None, "attrs": []},
+        logging.WARNING: {"color": "yellow", "on_color": None, "attrs": ["bold"]},
+        logging.ERROR: {"color": "red", "on_color": None, "attrs": ["bold"]},
+        logging.CRITICAL: {"color": "light_red", "on_color": None, "attrs": ["bold"]},
     }
 
-    def __init__(self, fmt=COLOR_FORMAT, *,
-                 level_colors=LEVEL_COLORS, color=True):
+    def __init__(self, fmt=COLOR_FORMAT, *, level_colors=LEVEL_COLORS, color=True):
         super().__init__(fmt=fmt)
         self.__level_colors = level_colors
         self.__color = color
@@ -61,7 +36,7 @@ class ColorFormatter(logging.Formatter):
 
     def __format_with_color(self, s: str, level: int):
         if not self.__color:
-            color_code, reset_code = '', ''
+            color_code, reset_code = "", ""
         else:
             color = self.__level_colors.get(level)
 
@@ -72,10 +47,9 @@ class ColorFormatter(logging.Formatter):
 
             # Use termcolor `colored` function to get
             # color and reset color codes
-            color_code, reset_code = (
-                termcolor.colored(self.__SPLIT_TOKEN, **color)
-                         .split(self.__SPLIT_TOKEN)
-            )
+            color_code, reset_code = termcolor.colored(
+                self.__SPLIT_TOKEN, **color
+            ).split(self.__SPLIT_TOKEN)
 
             if old_value is not None:
                 os.environ[self.__FORCE_COLOR_ENV_NAME] = old_value

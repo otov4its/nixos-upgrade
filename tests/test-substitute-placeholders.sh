@@ -31,8 +31,7 @@ for placeholder in \
   '@path@' \
   '@helper@' \
   '@pyfile@' \
-  '@py_opts@'
-do
+  '@py_opts@'; do
   if ! grep --fixed-strings --quiet -- "--replace-fail \"$placeholder\"" "$PACKAGE_NIX"; then
     printf 'missing --replace-fail directive for placeholder %s\n' "$placeholder" >&2
     exit 1

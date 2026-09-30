@@ -9,7 +9,7 @@ readonly PROJECT_ROOT
 readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 
 NAME=nixos-upgrade-test \
-python3 - "$PYTHON_FILE" <<'PY'
+  python3 - "$PYTHON_FILE" <<'PY'
 import importlib.util
 import io
 import os

@@ -32,8 +32,8 @@ function activation_failed {
 
 function has_control_characters {
   case "$1" in
-    *$'\n'*|*$'\r'*|*$'\t'*) return 0 ;;
-    *) return 1 ;;
+  *$'\n'* | *$'\r'* | *$'\t'*) return 0 ;;
+  *) return 1 ;;
   esac
 }
 
@@ -49,7 +49,7 @@ function decode_base64 {
   local output_file=$2
   local round_trip
 
-  if ! printf '%s' "$encoded" | base64 --decode > "$output_file"; then
+  if ! printf '%s' "$encoded" | base64 --decode >"$output_file"; then
     return 1
   fi
   if ! round_trip=$(base64 --wrap=0 "$output_file"); then
@@ -106,7 +106,7 @@ function lookup_owner_account {
   owner_name=
   owner_uid=
   owner_home=
-  IFS=: read -r owner_name _ owner_uid _ _ owner_home _ <<< "$passwd_entry"
+  IFS=: read -r owner_name _ owner_uid _ _ owner_home _ <<<"$passwd_entry"
   [[ -n "${owner_name:-}" && "$owner_uid" == "$uid" && -n "${owner_home:-}" ]]
 }
 
@@ -138,12 +138,12 @@ function publish_lock_file {
     return 1
   fi
   case "$temporary_file" in
-    "$flake_dir"/.flake.lock.*) ;;
-    *) return 1 ;;
+  "$flake_dir"/.flake.lock.*) ;;
+  *) return 1 ;;
   esac
 
   if ! run_as_owner "$flake_uid" "$account_name" "$account_home" \
-    tee -- "$temporary_file" < "$lock_contents_file" > /dev/null; then
+    tee -- "$temporary_file" <"$lock_contents_file" >/dev/null; then
     run_as_owner "$flake_uid" "$account_name" "$account_home" rm -f -- "$temporary_file" || :
     return 1
   fi
@@ -211,7 +211,7 @@ function commit_repository {
     --file=-
   )
   if run_as_owner "$git_uid" "$account_name" "$account_home" \
-    git "${git_args[@]}" < "$commit_message_file" >&2; then
+    git "${git_args[@]}" <"$commit_message_file" >&2; then
     printf '%s' committed
   else
     printf '%s' failed
@@ -238,37 +238,37 @@ seen_no_commit=false
 
 while [[ "$#" -gt 0 ]]; do
   case "$1" in
-    --expected-current)
-      [[ "$seen_expected" == false && "$#" -ge 2 ]] || invalid_request 'invalid --expected-current argument'
-      expected_current=$2
-      seen_expected=true
-      shift 2
-      ;;
-    --system-closure)
-      [[ "$seen_closure" == false && "$#" -ge 2 ]] || invalid_request 'invalid --system-closure argument'
-      system_closure=$2
-      seen_closure=true
-      shift 2
-      ;;
-    --flake-dir)
-      [[ "$seen_flake" == false && "$#" -ge 2 ]] || invalid_request 'invalid --flake-dir argument'
-      flake_dir=$2
-      seen_flake=true
-      shift 2
-      ;;
-    --no-commit)
-      [[ "$seen_no_commit" == false ]] || invalid_request 'duplicate --no-commit option'
-      no_commit=true
-      seen_no_commit=true
-      shift
-      ;;
-    *)
-      invalid_request 'unexpected activation argument'
-      ;;
+  --expected-current)
+    [[ "$seen_expected" == false && "$#" -ge 2 ]] || invalid_request 'invalid --expected-current argument'
+    expected_current=$2
+    seen_expected=true
+    shift 2
+    ;;
+  --system-closure)
+    [[ "$seen_closure" == false && "$#" -ge 2 ]] || invalid_request 'invalid --system-closure argument'
+    system_closure=$2
+    seen_closure=true
+    shift 2
+    ;;
+  --flake-dir)
+    [[ "$seen_flake" == false && "$#" -ge 2 ]] || invalid_request 'invalid --flake-dir argument'
+    flake_dir=$2
+    seen_flake=true
+    shift 2
+    ;;
+  --no-commit)
+    [[ "$seen_no_commit" == false ]] || invalid_request 'duplicate --no-commit option'
+    no_commit=true
+    seen_no_commit=true
+    shift
+    ;;
+  *)
+    invalid_request 'unexpected activation argument'
+    ;;
   esac
 done
 
-[[ "$seen_expected" == true && "$seen_closure" == true && "$seen_flake" == true ]] || \
+[[ "$seen_expected" == true && "$seen_closure" == true && "$seen_flake" == true ]] ||
   invalid_request 'missing required activation argument'
 for activation_path in "$expected_current" "$system_closure" "$flake_dir"; do
   [[ -n "$activation_path" ]] || invalid_request 'empty activation path'
@@ -279,7 +279,7 @@ done
 is_store_path "$expected_current" || invalid_request 'expected current system is not a store path'
 is_store_path "$system_closure" || invalid_request 'system closure is not a store path'
 
-temporary_dir=$(mktemp -d --tmpdir=/run nixos-upgrade-activation.XXXXXXXXXX) || \
+temporary_dir=$(mktemp -d --tmpdir=/run nixos-upgrade-activation.XXXXXXXXXX) ||
   activation_failed 'could not create private runtime directory' profile-failed
 trap 'rm -rf -- "$temporary_dir"' EXIT
 readonly temporary_dir
@@ -299,10 +299,10 @@ if ! manifest=$(jq -c -s '
   invalid_request 'malformed activation manifest'
 fi
 
-lock_requested=$(jq -r '.lock_file_base64 != null' <<< "$manifest")
-commit_requested=$(jq -r '.commit_message_base64 != null' <<< "$manifest")
-lock_contents=$(jq -r '.lock_file_base64 // ""' <<< "$manifest")
-commit_message=$(jq -r '.commit_message_base64 // ""' <<< "$manifest")
+lock_requested=$(jq -r '.lock_file_base64 != null' <<<"$manifest")
+commit_requested=$(jq -r '.commit_message_base64 != null' <<<"$manifest")
+lock_contents=$(jq -r '.lock_file_base64 // ""' <<<"$manifest")
+commit_message=$(jq -r '.commit_message_base64 // ""' <<<"$manifest")
 
 if [[ "$no_commit" == true && "$commit_requested" != false ]]; then
   invalid_request 'commit message must be null with --no-commit'
@@ -318,22 +318,22 @@ if [[ "$commit_requested" == true ]] && ! decode_base64 "$commit_message" "$comm
   invalid_request 'commit message is not canonical base64'
 fi
 
-canonical_system_closure=$(readlink -e -- "$system_closure") || \
+canonical_system_closure=$(readlink -e -- "$system_closure") ||
   invalid_request 'system closure does not exist'
-[[ "$canonical_system_closure" == "$system_closure" && -d "$system_closure" ]] || \
+[[ "$canonical_system_closure" == "$system_closure" && -d "$system_closure" ]] ||
   invalid_request 'system closure is not canonical'
 switch_program="$system_closure/bin/switch-to-configuration"
-[[ -f "$switch_program" && -x "$switch_program" ]] || \
+[[ -f "$switch_program" && -x "$switch_program" ]] ||
   invalid_request 'system closure has no executable switch-to-configuration'
-canonical_switch_program=$(readlink -e -- "$switch_program") || \
+canonical_switch_program=$(readlink -e -- "$switch_program") ||
   invalid_request 'switch-to-configuration cannot be resolved'
-[[ "$canonical_switch_program" == /nix/store/* ]] || \
+[[ "$canonical_switch_program" == /nix/store/* ]] ||
   invalid_request 'switch-to-configuration is outside the Nix store'
 
 [[ "$flake_dir" == /* ]] || invalid_request 'flake directory must be absolute'
-canonical_flake_dir=$(readlink -e -- "$flake_dir") || \
+canonical_flake_dir=$(readlink -e -- "$flake_dir") ||
   invalid_request 'flake directory does not exist'
-[[ "$canonical_flake_dir" == "$flake_dir" && -d "$flake_dir" && -f "$flake_dir/flake.nix" ]] || \
+[[ "$canonical_flake_dir" == "$flake_dir" && -d "$flake_dir" && -f "$flake_dir/flake.nix" ]] ||
   invalid_request 'flake directory must be canonical and contain flake.nix'
 
 if ! acquire_activation_lock; then

@@ -29,14 +29,14 @@ trap cleanup EXIT
 
 write_fake_command() {
   local command_path=$1
-  printf '#!%s\n' "$BASH" > "$command_path"
-  cat >> "$command_path"
+  printf '#!%s\n' "$BASH" >"$command_path"
+  cat >>"$command_path"
   chmod +x "$command_path"
 }
 
 mkdir --parents "$RUNTIME_DIR" "$FAKE_BIN" "$FLAKE_DIR" "$CURRENT_SYSTEM" "$NEW_SYSTEM"
-printf 'flake source\n' > "$FLAKE_DIR/flake.nix"
-printf 'original lock\n' > "$FLAKE_DIR/flake.lock"
+printf 'flake source\n' >"$FLAKE_DIR/flake.nix"
+printf 'original lock\n' >"$FLAKE_DIR/flake.lock"
 
 write_fake_command "$FAKE_BIN/nix" <<'EOF'
 set -o errexit
@@ -221,7 +221,7 @@ PY
 }
 
 reset_records() {
-  : > "$EVENT_LOG"
+  : >"$EVENT_LOG"
   rm -f -- "$SUDO_ARGS" "$SUDO_INPUT" "$SUDO_OPTIONS"
 }
 
@@ -235,7 +235,7 @@ if TEST_EXPECTED_CONFIGURATION=test-configuration \
   TEST_EXPECTED_INPUTS='nixpkgs home-manager' run_app \
   --flake "$FLAKE_DIR" -C test-configuration \
   --inputs nixpkgs home-manager --assume-no --color=never \
-  > "$TEST_ROOT/decline.out" 2> "$TEST_ROOT/decline.err"; then
+  >"$TEST_ROOT/decline.out" 2>"$TEST_ROOT/decline.err"; then
   :
 else
   status=$?
@@ -254,7 +254,7 @@ fi
 
 reset_records
 run_app --flake "$FLAKE_DIR" --assume-yes --commit-message $'operator note\nsecond line' --color=never \
-  > "$TEST_ROOT/confirmed.out" 2> "$TEST_ROOT/confirmed.err"
+  >"$TEST_ROOT/confirmed.out" 2>"$TEST_ROOT/confirmed.err"
 
 python3 - "$EVENT_LOG" "$SUDO_ARGS" "$SUDO_INPUT" "$SUDO_OPTIONS" "$FLAKE_DIR" "$FAKE_HELPER" <<'PY'
 import base64
@@ -289,7 +289,7 @@ grep -Fq 'commit' "$TEST_ROOT/confirmed.err"
 
 reset_records
 if TEST_REMOVE_LOCK_AFTER_BUILD=1 run_app --flake "$FLAKE_DIR" --assume-yes --color=never \
-  > "$TEST_ROOT/missing-lock.out" 2> "$TEST_ROOT/missing-lock.err"; then
+  >"$TEST_ROOT/missing-lock.out" 2>"$TEST_ROOT/missing-lock.err"; then
   printf 'missing updated lock file unexpectedly allowed activation\n' >&2
   exit 1
 fi
@@ -300,7 +300,7 @@ reset_records
 export TEST_EXPECT_NO_UPDATE=1
 export TEST_SUDO_RESULT='{"system":"switched","lock":"not-requested","commit":"not-requested"}'
 run_app --flake "$FLAKE_DIR" --no-update-lock-file --assume-yes --no-commit --color=never \
-  > "$TEST_ROOT/no-update.out" 2> "$TEST_ROOT/no-update.err"
+  >"$TEST_ROOT/no-update.out" 2>"$TEST_ROOT/no-update.err"
 python3 - "$EVENT_LOG" "$SUDO_ARGS" "$SUDO_INPUT" <<'PY'
 import json
 import pathlib
@@ -318,7 +318,7 @@ reset_records
 export TEST_EXPECT_NO_UPDATE=0
 export TEST_BUILD_FAILURE=1
 if run_app --flake "$FLAKE_DIR" --assume-yes --color=never \
-  > "$TEST_ROOT/build-failure.out" 2> "$TEST_ROOT/build-failure.err"; then
+  >"$TEST_ROOT/build-failure.out" 2>"$TEST_ROOT/build-failure.err"; then
   printf 'build failure unexpectedly succeeded\n' >&2
   exit 1
 fi
@@ -332,7 +332,7 @@ reset_records
 export TEST_BUILD_FAILURE=0
 export TEST_BUILD_TARGET="$CURRENT_SYSTEM"
 run_app --flake "$FLAKE_DIR" --assume-yes --color=never \
-  > "$TEST_ROOT/no-changes.out" 2> "$TEST_ROOT/no-changes.err"
+  >"$TEST_ROOT/no-changes.out" 2>"$TEST_ROOT/no-changes.err"
 test ! -e "$SUDO_ARGS"
 if grep -Fq 'nvd' "$EVENT_LOG"; then
   printf 'NVD diff ran when the closures were identical\n' >&2

@@ -35,18 +35,18 @@
 
 ## File map
 
-| File | Responsibility after the change |
-|---|---|
-| `src/bin/nixos-upgrade` | Unprivileged environment/lock setup, supported-signal blocking, help/version compatibility, then `exec` Python; no worker startup or privilege drop. |
-| `src/lib/nixos-upgrade.py` | User-side workflow, temporary lock workspace, diff/confirmation, and direct helper invocation. |
-| `src/lib/activation.py` | Build the safe sudo/helper argv, encode the data-only JSON stdin manifest, and validate the helper's one-shot JSON result; package substitution sets the helper path, while `shutil.which("env")` resolves GNU env from the launcher's fixed PATH. |
-| `src/lib/nixos-upgrade-activate` | One-shot root Bash helper for profile update, system switch, lock publication, and owner-based commit; it reads content, never handoff paths, from stdin. |
-| `package.nix` | Substitute the helper path and fixed command paths, add `jq`; run shell/Python checks; stop installing the persistent worker. |
-| `flake.nix` | Add Python unit-test and x86_64-linux NixOS VM checks with test-only sudo policy. |
-| `tests/test_activation.py` | Unit tests for command construction and helper-result parsing. |
-| `tests/sudo-activation-vm.nix` | Exercise helper and full user-to-sudo workflow in a disposable NixOS VM. |
-| Existing `tests/*.sh` | Replace worker-protocol assumptions and retain the current CLI, logging, signal, lock, and commit regressions. |
-| `README.md`, `src/share/man/man8/nixos-upgrade.8.md`, `CHANGELOG.md`, `REVIEW.md` | Document invocation/elevation timing, record the change, and mark B.1 chosen/implemented. |
+| File                                                                              | Responsibility after the change                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/bin/nixos-upgrade`                                                           | Unprivileged environment/lock setup, supported-signal blocking, help/version compatibility, then `exec` Python; no worker startup or privilege drop.                                                                                               |
+| `src/lib/nixos-upgrade.py`                                                        | User-side workflow, temporary lock workspace, diff/confirmation, and direct helper invocation.                                                                                                                                                     |
+| `src/lib/activation.py`                                                           | Build the safe sudo/helper argv, encode the data-only JSON stdin manifest, and validate the helper's one-shot JSON result; package substitution sets the helper path, while `shutil.which("env")` resolves GNU env from the launcher's fixed PATH. |
+| `src/lib/nixos-upgrade-activate`                                                  | One-shot root Bash helper for profile update, system switch, lock publication, and owner-based commit; it reads content, never handoff paths, from stdin.                                                                                          |
+| `package.nix`                                                                     | Substitute the helper path and fixed command paths, add `jq`; run shell/Python checks; stop installing the persistent worker.                                                                                                                      |
+| `flake.nix`                                                                       | Add Python unit-test and x86_64-linux NixOS VM checks with test-only sudo policy.                                                                                                                                                                  |
+| `tests/test_activation.py`                                                        | Unit tests for command construction and helper-result parsing.                                                                                                                                                                                     |
+| `tests/sudo-activation-vm.nix`                                                    | Exercise helper and full user-to-sudo workflow in a disposable NixOS VM.                                                                                                                                                                           |
+| Existing `tests/*.sh`                                                             | Replace worker-protocol assumptions and retain the current CLI, logging, signal, lock, and commit regressions.                                                                                                                                     |
+| `README.md`, `src/share/man/man8/nixos-upgrade.8.md`, `CHANGELOG.md`, `REVIEW.md` | Document invocation/elevation timing, record the change, and mark B.1 chosen/implemented.                                                                                                                                                          |
 
 ## Interfaces
 
@@ -72,7 +72,11 @@ Do not run this sudo child in a new session: sudo must retain the controlling te
 On execution, the helper writes one JSON object to stdout and diagnostics/command output to stderr:
 
 ```json
-{"system":"switched|invalid-request|stale|profile-failed|switch-failed","lock":"published|not-requested|failed|not-run","commit":"committed|no-changes|not-git|not-requested|failed|not-run"}
+{
+  "system": "switched|invalid-request|stale|profile-failed|switch-failed",
+  "lock": "published|not-requested|failed|not-run",
+  "commit": "committed|no-changes|not-git|not-requested|failed|not-run"
+}
 ```
 
 Exit status is zero only when the system switch succeeded. A post-switch lock/commit failure is represented in the JSON while preserving `system: "switched"`; Python reports the secondary failure without saying activation failed. Invalid requests, stale closures, and activation failures return nonzero with a JSON result when the helper started. A sudo authorization failure may produce no JSON, which Python reports as a failed/cancelled sudo request. The parser rejects unknown statuses and inconsistent JSON/exit-status combinations.
@@ -86,12 +90,14 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
 ### Task 1: Pin the sudo/helper interface with unit tests
 
 **Files:**
+
 - Create: `src/lib/activation.py`
 - Create: `tests/test_activation.py`
 - Modify: `docs/superpowers/specs/2026-09-27-user-controller-sudo-activation-design.md`
 - Modify: `flake.nix`
 
 **Interfaces:**
+
 - Produces `ActivationRequest`, `ActivationResult`, `build_activation_command(request) -> list[str]`, `encode_activation_request(request) -> str`, and `parse_activation_result(stdout, returncode) -> ActivationResult`.
 - `ActivationRequest` fields: `env_path: str`, `supported_signals: tuple[int, ...]`, `sudo_path: str`, `helper_path: str`, `expected_current: str`, `system_closure: str`, `flake_dir: str`, `lock_file_bytes: bytes | None`, `commit_message: str | None`, and `no_commit: bool`. Production `sudo_path` is `/run/wrappers/bin/sudo`. `encode_activation_request()` base64-encodes lock bytes and UTF-8 commit-message bytes into exactly the two documented JSON fields; `no_commit=True` requires a null commit message, and `no_commit=False` requires a string.
 - `ActivationResult` fields: `system`, `lock`, and `commit`, restricted to the values in the helper-result contract above; the parser verifies that `system == "switched"` corresponds to exit status zero and all other system statuses to nonzero.
@@ -110,26 +116,28 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
   Run: `python3 -m unittest discover -s tests -p 'test_activation.py' -v`
 
   Expected: FAIL because the activation interface does not exist yet.
+
 - [ ] **Step 4: Implement the typed request/result and pure command/result functions**
 
   Keep subprocess execution out of this module; it only encodes argv/manifest data and validates the fixed JSON result. Add a `checks.x86_64-linux.python-unit-tests` check that runs `python3 -m unittest discover -s tests -p 'test_*.py' -v`.
+
 - [ ] **Step 5: Index new files and run the focused tests/check**
 
   Run: `git add src/lib/activation.py tests/test_activation.py && python3 -m unittest discover -s tests -p 'test_activation.py' -v && nix build .#checks.x86_64-linux.python-unit-tests`
 
   Expected: focused unit tests and the Nix check pass.
 
-
-
 ### Task 2: Add the one-shot privileged helper and VM contract test
 
 **Files:**
+
 - Create: `src/lib/nixos-upgrade-activate`
 - Create: `tests/sudo-activation-vm.nix`
 - Modify: `package.nix`
 - Modify: `flake.nix`
 
 **Interfaces:**
+
 - The helper implements the `activate` argv and stdin-manifest contract in Task 1 and emits the documented JSON result.
 - The helper uses fixed NixOS paths for `/nix/var/nix/profiles/system` and `/run/current-system`; it starts with `PATH=@path@` substituted to the package's fixed runtime path, including `jq` and `base64`.
 - It creates/opens `/run/lock/nixos-upgrade-activation.lock` at runtime in the root-owned `/run/lock` directory, verifies the lock path is a root-owned regular file (not a symlink), and takes a blocking `flock`; it never unlinks the lock. After obtaining it, it compares canonical `/run/current-system` with `--expected-current`, so a waiting second request is rejected as stale.
@@ -148,6 +156,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
   Run: `git add tests/sudo-activation-vm.nix && nix build .#checks.x86_64-linux.sudo-activation`
 
   Expected: FAIL because the helper output and behavior are not implemented.
+
 - [ ] **Step 3: Implement the Bash helper**
   - Require effective UID 0 and exact `activate` arguments; reject extras and malformed paths. Parse exactly the JSON stdin schema with `jq`; reject unknown keys, wrong field types, and invalid base64 before mutation.
   - Create/open `/run/lock/nixos-upgrade-activation.lock` at runtime in the root-owned `/run/lock` directory; reject a symlink, non-regular, or non-root-owned lock file, take a blocking `flock`, and never unlink it. After acquiring it, compare the canonical `/run/current-system` with `--expected-current` before mutation, returning `stale` if another upgrade already changed the system.
@@ -166,6 +175,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
 ### Task 3: Replace the persistent worker with the unprivileged controller and sudo workflow
 
 **Files:**
+
 - Modify: `src/lib/nixos-upgrade.py`
 - Modify: `src/lib/activation.py`
 - Modify: `src/bin/nixos-upgrade`
@@ -179,6 +189,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
 - Keep/verify: `tests/test-singleton-lock.sh`, `tests/test-signal-list.sh`, `tests/test-preserve-handler.sh`
 
 **Interfaces:**
+
 - `CliProgram.run_cmd(...) -> subprocess.CompletedProcess[str]` retains output forwarding and returns both `returncode` and `stdout`.
 - Add `CliProgram.run_privileged_activation() -> ActivationResult`; call it only in the positive-confirmation branch. It passes the JSON manifest via subprocess stdin, keeps sudo's stderr/controlling TTY available, sets supported signal dispositions to ignored for the helper chain, and reports the parsed activation result before processing any queued signal.
 - `CliProgram` owns a temporary work directory for the Nix lock/build outputs. It reads lock bytes and constructs the commit message as data for the stdin manifest; the helper receives no caller-owned temporary paths and performs no cleanup of them.
@@ -196,6 +207,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
   Run: `bash tests/test-user-workflow.sh && bash tests/test-git-flake-source.sh && bash tests/test-cli-options.sh && bash tests/test-auto-commit-policy.sh && bash tests/test-singleton-lock.sh && bash tests/test-signal-list.sh`
 
   Expected: the user-workflow and process-boundary assertions fail against the current worker-based design.
+
 - [ ] **Step 3: Implement the integrated user workflow and launcher transition**
   - Read `/run/current-system` directly; resolve/check the flake path in Python without changing raw Git-path semantics. Remove Python's worker-FD setup, `run_privileged_task`, and line-protocol read/write helpers.
   - Keep the Nix temporary workspace owned by the invoking user; use it for existing/generated lock files, then encode requested lock bytes and commit-message text into the JSON stdin manifest. Never pass the helper a user-owned temporary path.
@@ -212,6 +224,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
 ### Task 4: Exercise the complete app in the VM and update user-facing documentation
 
 **Files:**
+
 - Modify: `tests/sudo-activation-vm.nix`
 - Modify: `flake.nix`
 - Modify: `README.md`
@@ -229,6 +242,7 @@ Change `CliProgram.run_cmd(...)` to return `subprocess.CompletedProcess[str]`, r
   Run: `nix build .#checks.x86_64-linux.sudo-activation`
 
   Expected: the normal-user workflow succeeds with test-only sudo authorization; no production sudoers configuration is involved.
+
 - [ ] **Step 3: Document invocation, elevation, and the selected transport**
   - README and man page state to run the app without `sudo`; sudo authorization is requested only after upgrade confirmation.
   - State that `--assume-yes` does not bypass sudo and that the user must have host-configured sudo authorization.

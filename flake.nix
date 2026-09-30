@@ -35,8 +35,6 @@
         yaspin
         termcolor
     ]);
-    pythonPackages = python.pkgs;
-
     runtimeInputs = with pkgs; [
       pythonWithPkgs
       git
@@ -50,8 +48,22 @@
     pythonDevTools = [
       pkgs.basedpyright
       pkgs.ruff
-      pythonPackages.yapf
     ];
+
+    treefmt = pkgs.writeShellApplication {
+      name = "treefmt";
+      runtimeInputs = [
+        pkgs.treefmt
+        pkgs.nixfmt
+        pkgs.prettier
+        pkgs.ruff
+        pkgs.shfmt
+        pkgs.taplo
+      ];
+      text = ''
+        exec treefmt --config-file ${./treefmt.toml} "$@"
+      '';
+    };
 
     devShellInputs = with pkgs; [
       # Nix LSP
@@ -79,6 +91,8 @@
 
   in
   {
+    formatter = treefmt;
+
     packages = rec {
       default = pkgs.nixos-upgrade;
       dev = pkgs.callPackage ./package.nix {
@@ -162,6 +176,16 @@
           ];
         };
       in {
+        formatting = basePkgs.runCommand "nixos-upgrade-formatting" {
+          nativeBuildInputs = [ treefmt ];
+        } ''
+          cp -R ${self.outPath} ./source
+          chmod -R u+w ./source
+          cd ./source
+          treefmt --tree-root "$PWD" --fail-on-change --no-cache
+          touch $out
+        '';
+
         python-unit-tests = basePkgs.runCommand "nixos-upgrade-python-unit-tests" {
           nativeBuildInputs = [ basePkgs.python3 ];
         } ''

@@ -36,29 +36,34 @@ class ActivationCommandTests(unittest.TestCase):
 
         command = build_activation_command(request)
 
-        self.assertEqual(command, [
-            "/nix/store/core utils/bin/env",
-            "--ignore-signal=1,2,15",
-            "/run/wrappers/bin/sudo",
-            "--",
-            "/nix/store/helper path/lib/nixos-upgrade-activate",
-            "activate",
-            "--expected-current",
-            "/nix/store/old-closure",
-            "--system-closure",
-            "/nix/store/new-closure",
-            "--flake-dir",
-            "/etc/nixos; echo unsafe",
-        ])
+        self.assertEqual(
+            command,
+            [
+                "/nix/store/core utils/bin/env",
+                "--ignore-signal=1,2,15",
+                "/run/wrappers/bin/sudo",
+                "--",
+                "/nix/store/helper path/lib/nixos-upgrade-activate",
+                "activate",
+                "--expected-current",
+                "/nix/store/old-closure",
+                "--system-closure",
+                "/nix/store/new-closure",
+                "--flake-dir",
+                "/etc/nixos; echo unsafe",
+            ],
+        )
         self.assertNotIn("sh", command)
         self.assertNotIn("-c", command)
 
     def test_command_adds_no_commit_only_when_requested(self):
         commit_command = build_activation_command(self.make_request())
-        no_commit_command = build_activation_command(self.make_request(
-            commit_message=None,
-            no_commit=True,
-        ))
+        no_commit_command = build_activation_command(
+            self.make_request(
+                commit_message=None,
+                no_commit=True,
+            )
+        )
 
         self.assertNotIn("--no-commit", commit_command)
         self.assertEqual(no_commit_command[-1], "--no-commit")
@@ -74,7 +79,7 @@ class ActivationCommandTests(unittest.TestCase):
 
 class ActivationManifestTests(unittest.TestCase):
     def test_manifest_contains_only_base64_file_contents(self):
-        lock_bytes = b'\x00\xfflock\n'
+        lock_bytes = b"\x00\xfflock\n"
         commit_message = "Upgrade\nwith details\n"
         request = ActivationRequest(
             env_path="/bin/env",
@@ -91,10 +96,13 @@ class ActivationManifestTests(unittest.TestCase):
 
         manifest = json.loads(encode_activation_request(request))
 
-        self.assertEqual(set(manifest), {
-            "lock_file_base64",
-            "commit_message_base64",
-        })
+        self.assertEqual(
+            set(manifest),
+            {
+                "lock_file_base64",
+                "commit_message_base64",
+            },
+        )
         self.assertEqual(
             base64.b64decode(manifest["lock_file_base64"], validate=True),
             lock_bytes,
@@ -120,24 +128,37 @@ class ActivationManifestTests(unittest.TestCase):
             no_commit=True,
         )
 
-        self.assertEqual(json.loads(encode_activation_request(request)), {
-            "lock_file_base64": None,
-            "commit_message_base64": None,
-        })
+        self.assertEqual(
+            json.loads(encode_activation_request(request)),
+            {
+                "lock_file_base64": None,
+                "commit_message_base64": None,
+            },
+        )
 
 
 class ActivationResultTests(unittest.TestCase):
     def test_parser_accepts_every_documented_status_with_consistent_exit_code(self):
         cases = [
             ({"system": "switched", "lock": "published", "commit": "committed"}, 0),
-            ({"system": "switched", "lock": "not-requested", "commit": "no-changes"}, 0),
+            (
+                {"system": "switched", "lock": "not-requested", "commit": "no-changes"},
+                0,
+            ),
             ({"system": "switched", "lock": "failed", "commit": "failed"}, 0),
             ({"system": "stale", "lock": "not-run", "commit": "not-run"}, 1),
             ({"system": "profile-failed", "lock": "not-run", "commit": "not-run"}, 1),
             ({"system": "switch-failed", "lock": "not-run", "commit": "not-run"}, 1),
             ({"system": "invalid-request", "lock": "not-run", "commit": "not-run"}, 2),
             ({"system": "switched", "lock": "published", "commit": "not-git"}, 0),
-            ({"system": "switched", "lock": "not-requested", "commit": "not-requested"}, 0),
+            (
+                {
+                    "system": "switched",
+                    "lock": "not-requested",
+                    "commit": "not-requested",
+                },
+                0,
+            ),
         ]
 
         for result, returncode in cases:
@@ -153,12 +174,33 @@ class ActivationResultTests(unittest.TestCase):
             "not json",
             "{}",
             json.dumps({"system": "switched", "lock": "published"}),
-            json.dumps({"system": "unknown", "lock": "published", "commit": "committed"}),
-            json.dumps({"system": "switched", "lock": "unknown", "commit": "committed"}),
-            json.dumps({"system": "switched", "lock": "published", "commit": "unknown"}),
-            json.dumps({"system": ["switched"], "lock": "published", "commit": "committed"}),
-            json.dumps({"system": "switched", "lock": {"status": "published"}, "commit": "committed"}),
-            json.dumps({"system": "switched", "lock": "published", "commit": "committed", "extra": "field"}),
+            json.dumps(
+                {"system": "unknown", "lock": "published", "commit": "committed"}
+            ),
+            json.dumps(
+                {"system": "switched", "lock": "unknown", "commit": "committed"}
+            ),
+            json.dumps(
+                {"system": "switched", "lock": "published", "commit": "unknown"}
+            ),
+            json.dumps(
+                {"system": ["switched"], "lock": "published", "commit": "committed"}
+            ),
+            json.dumps(
+                {
+                    "system": "switched",
+                    "lock": {"status": "published"},
+                    "commit": "committed",
+                }
+            ),
+            json.dumps(
+                {
+                    "system": "switched",
+                    "lock": "published",
+                    "commit": "committed",
+                    "extra": "field",
+                }
+            ),
             "{}\n{}",
         ]
 
@@ -168,16 +210,20 @@ class ActivationResultTests(unittest.TestCase):
                     parse_activation_result(stdout, 0)
 
     def test_parser_rejects_exit_status_inconsistent_with_system_status(self):
-        switched = json.dumps({
-            "system": "switched",
-            "lock": "published",
-            "commit": "committed",
-        })
-        stale = json.dumps({
-            "system": "stale",
-            "lock": "not-run",
-            "commit": "not-run",
-        })
+        switched = json.dumps(
+            {
+                "system": "switched",
+                "lock": "published",
+                "commit": "committed",
+            }
+        )
+        stale = json.dumps(
+            {
+                "system": "stale",
+                "lock": "not-run",
+                "commit": "not-run",
+            }
+        )
 
         with self.assertRaises(ValueError):
             parse_activation_result(switched, 1)

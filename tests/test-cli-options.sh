@@ -16,11 +16,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-
 set +o errexit
 NAME=nixos-upgrade-test \
-TERM_CORE_SIGS="" \
-python3 "$PYTHON_FILE" --color=never --assume-yes --assume-no \
+  TERM_CORE_SIGS="" \
+  python3 "$PYTHON_FILE" --color=never --assume-yes --assume-no \
   2>"$STDERR_FILE"
 status=$?
 set -o errexit
@@ -32,8 +31,8 @@ printf 'ok: conflicting assume-yes/assume-no options are rejected\n'
 
 set +o errexit
 NAME=nixos-upgrade-test \
-TERM_CORE_SIGS="" \
-python3 "$PYTHON_FILE" --color=never --no-update-lock-file \
+  TERM_CORE_SIGS="" \
+  python3 "$PYTHON_FILE" --color=never --no-update-lock-file \
   --inputs nixpkgs 2>"$STDERR_FILE"
 status=$?
 set -o errexit

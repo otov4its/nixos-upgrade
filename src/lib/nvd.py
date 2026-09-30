@@ -16,11 +16,7 @@ class ChangeCounts:
     @property
     def total(self) -> int:
         return (
-            self.added
-            + self.removed
-            + self.upgraded
-            + self.downgraded
-            + self.changed
+            self.added + self.removed + self.upgraded + self.downgraded + self.changed
         )
 
 

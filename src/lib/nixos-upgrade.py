@@ -67,15 +67,13 @@ class CliProgram:
             )
         if self.args._argv is not None:
             self.exit_with_usage_error(
-                "unrecognized arguments: " + ' '.join(self.args._argv),
+                "unrecognized arguments: " + " ".join(self.args._argv),
             )
 
         self.singleton_lock_fd = None
         self.check_singleton()
 
-        self.temporary_directory = tempfile.TemporaryDirectory(
-            prefix=f"{self.NAME}-"
-        )
+        self.temporary_directory = tempfile.TemporaryDirectory(prefix=f"{self.NAME}-")
         self.temporary_path = pathlib.Path(self.temporary_directory.name)
         self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
         self.result_link = self.temporary_path / "result"
@@ -151,7 +149,8 @@ class CliProgram:
 
                 self.spinner_stop()
                 self.logger.warning(
-                  "  SIGKILL has been sent to the subprocess as a last resort")
+                    "  SIGKILL has been sent to the subprocess as a last resort"
+                )
 
                 proc.communicate()
 
@@ -174,12 +173,19 @@ class CliProgram:
         self.logger.debug(f"{current_system_closure=}")
         return current_system_closure
 
-    def run_cmd(self, cmd: typing.List[str], desc="", msg_on_success="",
-                *,
-                stderr_out=False, with_spinner=True, exit_on_error=True,
-                msg_on_success_loglevel=logging.INFO,
-                env_to_update: typing.Mapping[str, str] | None = None,
-                **kwargs) -> subprocess.CompletedProcess[str]:
+    def run_cmd(
+        self,
+        cmd: typing.List[str],
+        desc="",
+        msg_on_success="",
+        *,
+        stderr_out=False,
+        with_spinner=True,
+        exit_on_error=True,
+        msg_on_success_loglevel=logging.INFO,
+        env_to_update: typing.Mapping[str, str] | None = None,
+        **kwargs,
+    ) -> subprocess.CompletedProcess[str]:
         stderr_out = self.debug_mode or stderr_out
 
         if desc:
@@ -211,7 +217,7 @@ class CliProgram:
             env=env,
             start_new_session=True,
             text=True,
-            **kwargs
+            **kwargs,
         )
 
         self.running_subproc = proc
@@ -272,83 +278,95 @@ class CliProgram:
 
     @staticmethod
     def clear_color(text):
-        termcolor_regex = r'\033\[[0-9;]+m'
-        return re.sub(termcolor_regex, '', text)
+        termcolor_regex = r"\033\[[0-9;]+m"
+        return re.sub(termcolor_regex, "", text)
 
     def parse_args(self):
         parser = argparse.ArgumentParser(
             prog=self.NAME,
             description="Updates nixos flake and shows changed packages",
-            exit_on_error=False
+            exit_on_error=False,
         )
 
         parser.add_argument(
-            '-V', '--version',
-            action='version',
+            "-V",
+            "--version",
+            action="version",
             version=self.VERSION,
         )
 
         parser.add_argument(
-            '--flake',
-            help=("Nixos flake dir "
-                  f"(default: {self.NIXOS_FLAKE_DEFAULT_PATH})"),
+            "--flake",
+            help=(f"Nixos flake dir (default: {self.NIXOS_FLAKE_DEFAULT_PATH})"),
             default=self.NIXOS_FLAKE_DEFAULT_PATH,
             type=pathlib.Path,
         )
 
         parser.add_argument(
-            '-C', '--configuration',
-            metavar='NAME',
-            help=("NixOS configuration to build "
-                  f"(default: {self.HOSTNAME})"),
+            "-C",
+            "--configuration",
+            metavar="NAME",
+            help=(f"NixOS configuration to build (default: {self.HOSTNAME})"),
             default=self.HOSTNAME,
         )
 
         lock_update_group = parser.add_mutually_exclusive_group()
         lock_update_group.add_argument(
-            '-u', '--no-update-lock-file',
-            action='store_true',
+            "-u",
+            "--no-update-lock-file",
+            action="store_true",
             help=f"do not update {self.FLAKE_LOCK}",
         )
         lock_update_group.add_argument(
-            '--inputs',
-            metavar='NAME',
-            nargs='+',
+            "--inputs",
+            metavar="NAME",
+            nargs="+",
             help="update only the named flake inputs (default: update all)",
         )
 
-        parser.add_argument('-m', '--commit-message',
-                            help="add a commit message",
-                            default="",
-                            type=str)
+        parser.add_argument(
+            "-m", "--commit-message", help="add a commit message", default="", type=str
+        )
 
         assume_group = parser.add_mutually_exclusive_group()
         assume_group.add_argument(
-            '-y', '--assume-yes', action='store_true',
-            help=('when a yes/no prompt would be presented, '
-                  'assume that the user entered "yes". '
-                  'In particular, suppresses the prompt that '
-                  'appears when upgrading system.'))
+            "-y",
+            "--assume-yes",
+            action="store_true",
+            help=(
+                "when a yes/no prompt would be presented, "
+                'assume that the user entered "yes". '
+                "In particular, suppresses the prompt that "
+                "appears when upgrading system."
+            ),
+        )
 
         assume_group.add_argument(
-            '-n', '--assume-no', action='store_true',
-            help='likewise --assume-yes')
+            "-n", "--assume-no", action="store_true", help="likewise --assume-yes"
+        )
 
-        parser.add_argument('-c', '--no-commit', action='store_true',
-                            help='do not commit a flake repo')
+        parser.add_argument(
+            "-c", "--no-commit", action="store_true", help="do not commit a flake repo"
+        )
 
-        parser.add_argument('-v', '--verbose', action='count', default=0,
-                            help="increase verbosity")
+        parser.add_argument(
+            "-v", "--verbose", action="count", default=0, help="increase verbosity"
+        )
 
-        parser.add_argument('-q', '--quiet', action='count', default=0,
-                            help="decrease verbosity")
+        parser.add_argument(
+            "-q", "--quiet", action="count", default=0, help="decrease verbosity"
+        )
 
-        parser.add_argument('--color',
-                            choices=[ColorOption.AUTO.value,
-                                     ColorOption.ALWAYS.value,
-                                     ColorOption.NEVER.value],
-                            default=ColorOption.AUTO,
-                            help="when to display output using colors")
+        parser.add_argument(
+            "--color",
+            choices=[
+                ColorOption.AUTO.value,
+                ColorOption.ALWAYS.value,
+                ColorOption.NEVER.value,
+            ],
+            default=ColorOption.AUTO,
+            help="when to display output using colors",
+        )
 
         args = types.SimpleNamespace()
 
@@ -364,8 +382,7 @@ class CliProgram:
             args.verbosity = args.verbose - args.quiet
 
             if args.color == ColorOption.AUTO:
-                args.colored_stdout, args.colored_stderr = \
-                    self.is_output_colored()
+                args.colored_stdout, args.colored_stderr = self.is_output_colored()
             elif args.color == ColorOption.ALWAYS:
                 args.colored_stdout, args.colored_stderr = True, True
                 os.environ["FORCE_COLOR"] = "1"
@@ -393,9 +410,9 @@ class CliProgram:
             return (True, True)
 
         if (
-            self.NO_COLOR_ENV_NAME in os.environ or
-            "ANSI_COLORS_DISABLED" in os.environ or
-            os.environ.get("TERM") == "dumb"
+            self.NO_COLOR_ENV_NAME in os.environ
+            or "ANSI_COLORS_DISABLED" in os.environ
+            or os.environ.get("TERM") == "dumb"
         ):
             return (False, False)
 
@@ -403,7 +420,8 @@ class CliProgram:
 
     def get_formatter(self):
         return colorformatter.ColorFormatter(
-            self.get_fmt_str(), color=self.colored_stderr)
+            self.get_fmt_str(), color=self.colored_stderr
+        )
 
     def get_fmt_str(self):
         return colorformatter.ColorFormatter.COLOR_FORMAT
@@ -496,10 +514,7 @@ class CliProgram:
         return self.EXIT_SIG_CODE_SHIFT + signum
 
     def exit_with_usage_error(self, msg=None):
-        self.exit_with_error(
-            msg,
-            os.EX_USAGE
-        )
+        self.exit_with_error(msg, os.EX_USAGE)
 
     def exit_with_error(self, msg=None, code=EXIT_ERR_CODE) -> typing.NoReturn:
         assert code != os.EX_OK
@@ -535,7 +550,7 @@ class CliProgram:
 
     @property
     def debug_mode(self) -> bool:
-        return (self.logger.level == logging.DEBUG)
+        return self.logger.level == logging.DEBUG
 
     def has_pkgs_changes(self) -> bool:
         return nvd.count_changes(self.diff).total > 0
@@ -558,12 +573,14 @@ class CliProgram:
         ]
         if self.args.inputs:
             command.extend(self.args.inputs)
-        command.extend([
-            "--flake",
-            str(self.args.flake),
-            "--output-lock-file",
-            str(self.lock_file_path),
-        ])
+        command.extend(
+            [
+                "--flake",
+                str(self.args.flake),
+                "--output-lock-file",
+                str(self.lock_file_path),
+            ]
+        )
         update = self.run_cmd(
             command,
             "updating flake lock file...",
@@ -572,7 +589,9 @@ class CliProgram:
         )
 
         if update.returncode != 0 or not self.lock_file_path.is_file():
-            self.exit_with_error("updating lock file error", update.returncode or self.EXIT_ERR_CODE)
+            self.exit_with_error(
+                "updating lock file error", update.returncode or self.EXIT_ERR_CODE
+            )
 
     @synsignals.add_handling
     def build_nixos_system(self):
@@ -591,10 +610,12 @@ class CliProgram:
             "--no-write-lock-file",
         ]
         if self.lock_file_path.is_file():
-            command.extend([
-                "--reference-lock-file",
-                str(self.lock_file_path),
-            ])
+            command.extend(
+                [
+                    "--reference-lock-file",
+                    str(self.lock_file_path),
+                ]
+            )
         command.append(nixos_config)
 
         build = self.run_cmd(
@@ -618,16 +639,17 @@ class CliProgram:
 
     @synsignals.add_handling
     def diff_closures(self):
-        if (
-            self.current_system_closure ==
-            self.upgraded_system_closure
-        ):
+        if self.current_system_closure == self.upgraded_system_closure:
             self.exit_with_success("no changes found")
 
         diff = self.run_cmd(
-            ["nvd", "--color=always", "diff",
+            [
+                "nvd",
+                "--color=always",
+                "diff",
                 str(self.current_system_closure),
-                str(self.upgraded_system_closure)],
+                str(self.upgraded_system_closure),
+            ],
             "Comparing derivations...",
         )
         self.diff = diff.stdout or ""
@@ -674,9 +696,7 @@ class CliProgram:
         except OSError as error:
             self.exit_with_error(f"could not read temporary lock file: {error}")
 
-        commit_message = (
-            None if self.args.no_commit else self.get_commit_msg()
-        )
+        commit_message = None if self.args.no_commit else self.get_commit_msg()
         env_path = shutil.which("env")
         if env_path is None:
             self.exit_with_error("GNU env is not available in the packaged PATH")
@@ -719,11 +739,14 @@ class CliProgram:
 
     @synsignals.add_handling
     def upgrade_system(self):
-        ANSWER_NO = 'n'
-        ANSWER_YES = 'y'
+        ANSWER_NO = "n"
+        ANSWER_YES = "y"
 
-        prompt = (self.get_changes_stat_str() + ". " +
-                  f"Upgrade system? ([{ANSWER_NO}]/{ANSWER_YES}): ")
+        prompt = (
+            self.get_changes_stat_str()
+            + ". "
+            + f"Upgrade system? ([{ANSWER_NO}]/{ANSWER_YES}): "
+        )
 
         assume_no = self.args.assume_no
         assume_yes = self.args.assume_yes
@@ -747,7 +770,7 @@ class CliProgram:
 
         self.logger.warning(prompt + answer)
 
-        if answer.strip().casefold() in {'y', 'yes'}:
+        if answer.strip().casefold() in {"y", "yes"}:
             self.logger.info("switching to upgraded system...")
             result = self.run_privileged_activation()
 
