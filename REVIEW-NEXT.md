@@ -38,6 +38,9 @@ owner.
 - **B.1–B.3:** The one-shot sudo activation design is implemented; direct Git
   worktree source semantics were selected; and the `nix flake show` pre-check
   was removed.
+- **B.4:** `CliProgram` is now a thin application controller composed from
+  typed options, `Console`, `CommandRunner`, and `NixWorkflow`; startup and
+  resource lifetime live in `main(argv)`.
 - **B.6:** Spinner output uses an explicitly selected stream and is disabled
   for non-interactive or dumb terminals.
 - **B.8, except the versioning follow-up below:** The package overlay and NixOS
@@ -48,7 +51,7 @@ owner.
 - **B.9:** Configuration selection is available as `-C, --configuration NAME`;
   selective lock updates are available as `--inputs NAME [NAME ...]`.
 
-## Decisions and known trade-offs
+## Accepted decisions and known trade-offs
 
 - **Git-indexed source:** Nix sees Git-indexed files, including modifications
   to tracked files, but not untracked or ignored files. New files must be added
@@ -67,6 +70,9 @@ owner.
   handles them at safe points. This is retained intentionally to avoid
   interrupting critical work; the simpler exception-based handler proposed in
   the old B.5 is not the chosen design.
+- **B.7 Python tooling (accepted):** Keep Ruff's conservative lint rules and
+  BasedPyright's basic mode. Enforce Ruff formatting through Treefmt; consider
+  expanding style or complexity rules separately if the project needs them.
 - **B.8 version convention (accepted):** Use SemVer with the date as build
   metadata: `X.Y.Z+YYYYMMDD` for a release and `X.Y.Z-rc+YYYYMMDD` for a
   release candidate (for example, `2.0.0-rc+20260929`). `package.nix` is the
@@ -75,20 +81,8 @@ owner.
 
 ## Remaining follow-ups
 
-1. **B.4 — modularize the controller (structural, not a correctness blocker).**
-   `CliProgram` still owns many concerns and `run_cmd` still polls a
-   non-blocking pipe. Some seams already exist (`activation.py`, `nvd.py`,
-   `colorformatter.py`, and `synsignals.py`), so any further split should be
-   incremental and preserve the tested workflow. A recent diagnostic reports
-   `run_cmd` at cyclomatic complexity 15.
-2. **B.7 — decide whether to expand Python lint/type policies.** Flake checks
-   now run Ruff over source and tests, BasedPyright in basic mode over
-   `src/lib`, the shell regression suite, ShellCheck, and the default/dev
-   bytecode policy test. Python unit, Nix static-analysis, module-evaluation,
-   and sudo-activation checks remain. Portable checks are configured for both
-   Linux systems; the sudo-activation VM remains x86_64-only. Ruff's initial
-   rule set is intentionally conservative; formatting and additional
-   style/complexity rules can be considered separately.
+No outstanding follow-ups from this review. The optional B.8 development-version
+source remains a consciously accepted convention rather than planned work.
 
 ## Review-file maintenance
 

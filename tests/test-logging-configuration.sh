@@ -10,24 +10,25 @@ readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 
 export NAME=nixos-upgrade-test
 python3 - "$PYTHON_FILE" <<'PY'
-import importlib.util
 import io
 import logging
 import os
 import pathlib
 import sys
-import types
 
-module_path = pathlib.Path(sys.argv[1])
-sys.path.insert(0, str(module_path.parent))
-spec = importlib.util.spec_from_file_location("nixos_upgrade", module_path)
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).parent))
+import cli_options
+import console
 
-options = module.cli_options.parse_args([], module.get_runtime_defaults())
+runtime_defaults = cli_options.RuntimeDefaults(
+    name=os.environ["NAME"],
+    version="test-version",
+    hostname="test-host",
+    default_flake=pathlib.Path("/etc/nixos"),
+)
+options = cli_options.parse_args([], runtime_defaults)
 logging.raiseExceptions = not __debug__
-module.console_module.Console(options, stderr=io.StringIO())
+console.Console(options, stderr=io.StringIO())
 
 assert logging.raiseExceptions is __debug__
 print("ok: logging.raiseExceptions is configured in the logging module")

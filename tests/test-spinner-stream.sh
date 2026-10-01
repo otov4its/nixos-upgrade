@@ -10,7 +10,6 @@ readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 
 NAME=nixos-upgrade-test \
   python3 - "$PYTHON_FILE" <<'PY'
-import importlib.util
 import io
 import os
 import pathlib
@@ -19,12 +18,9 @@ import unittest
 from dataclasses import replace
 from unittest import mock
 
-module_path = pathlib.Path(sys.argv[1])
-sys.path.insert(0, str(module_path.parent))
-spec = importlib.util.spec_from_file_location("nixos_upgrade_spinner_test", module_path)
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
+sys.path.insert(0, str(pathlib.Path(sys.argv[1]).parent))
+import cli_options
+import console as console_module
 
 
 class FakeSpinner:
@@ -53,20 +49,20 @@ class SpinnerStreamTests(unittest.TestCase):
     def make_console(
         self, *, stderr_tty, stdout_tty, colored_stderr=True, stdout=None, stderr=None
     ):
-        defaults = module.cli_options.RuntimeDefaults(
+        defaults = cli_options.RuntimeDefaults(
             name="nixos-upgrade-test",
             version="test",
             hostname="test-host",
             default_flake=pathlib.Path("/etc/nixos"),
         )
-        options = module.cli_options.parse_args([], defaults)
+        options = cli_options.parse_args([], defaults)
         color = (
-            module.cli_options.ColorOption.ALWAYS
+            cli_options.ColorOption.ALWAYS
             if colored_stderr
-            else module.cli_options.ColorOption.NEVER
+            else cli_options.ColorOption.NEVER
         )
         options = replace(options, color=color)
-        return module.console_module.Console(
+        return console_module.Console(
             options,
             stdout=stdout if stdout is not None else TerminalStream(tty=stdout_tty),
             stderr=stderr if stderr is not None else TerminalStream(tty=stderr_tty),
@@ -89,7 +85,7 @@ class SpinnerStreamTests(unittest.TestCase):
                 clear=True,
             ),
             mock.patch.object(
-                module.console_module.yaspin, "yaspin", make_spinner
+                console_module.yaspin, "yaspin", make_spinner
             ),
             mock.patch("sys.stdout", stdout),
         ):
@@ -123,7 +119,7 @@ class SpinnerStreamTests(unittest.TestCase):
                 {"NAME": "nixos-upgrade-test", "TERM": "dumb"},
                 clear=True,
             ),
-            mock.patch.object(module.console_module.yaspin, "yaspin") as factory,
+            mock.patch.object(console_module.yaspin, "yaspin") as factory,
         ):
             console = self.make_console(stderr_tty=True, stdout_tty=True)
             console.start_spinner()
@@ -138,7 +134,7 @@ class SpinnerStreamTests(unittest.TestCase):
                 {"NAME": "nixos-upgrade-test", "TERM": "xterm"},
                 clear=True,
             ),
-            mock.patch.object(module.console_module.yaspin, "yaspin") as factory,
+            mock.patch.object(console_module.yaspin, "yaspin") as factory,
         ):
             console = self.make_console(stderr_tty=False, stdout_tty=True)
             console.start_spinner()

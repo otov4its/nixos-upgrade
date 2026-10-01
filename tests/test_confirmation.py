@@ -1,24 +1,22 @@
 import importlib.util
-import os
+import io
 import pathlib
 import sys
 import types
 import unittest
 from unittest import mock
 
-
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 MODULE_PATH = PROJECT_ROOT / "src" / "lib" / "nixos-upgrade.py"
 sys.path.insert(0, str(MODULE_PATH.parent))
-os.environ.setdefault("NAME", "nixos-upgrade-test")
 
 termcolor = types.ModuleType("termcolor")
 setattr(termcolor, "colored", lambda text, *args, **kwargs: text)
-
 yaspin = types.ModuleType("yaspin")
 yaspin.__path__ = []
 setattr(yaspin, "yaspin", lambda *args, **kwargs: None)
 spinners = types.ModuleType("yaspin.spinners")
+setattr(spinners, "Spinners", types.SimpleNamespace(point=object()))
 setattr(yaspin, "spinners", spinners)
 
 with mock.patch.dict(
@@ -43,37 +41,52 @@ with mock.patch.dict(
 
 class ConfirmationTests(unittest.TestCase):
     def make_program(self, *, confirmed):
-        program = object.__new__(module.CliProgram)
-        program.args = types.SimpleNamespace()
-        program.console = mock.Mock()
-        program.console.confirm.return_value = confirmed
-        program.logger = mock.Mock()
-        program.get_changes_stat_str = lambda: "package changes"
-        program.run_privileged_activation = mock.Mock(
-            return_value=types.SimpleNamespace(system="switched"),
+        defaults = module.cli_options.RuntimeDefaults(
+            name="nixos-upgrade-test",
+            version="test",
+            hostname="test-host",
+            default_flake=pathlib.Path("/etc/nixos"),
         )
-        program.exit_with_success = mock.Mock(side_effect=SystemExit(0))
-        program.exit_with_error = mock.Mock(side_effect=SystemExit(1))
-        return program
+        options = module.cli_options.parse_args([], defaults)
+        console = mock.Mock()
+        console.stdout = io.StringIO()
+        console.confirm.return_value = confirmed
+        workflow = mock.Mock()
+        workflow.validate_flake.return_value = pathlib.Path("/etc/nixos")
+        workflow.prepare.return_value = module.nix_workflow.UpgradeCandidate(
+            current_system_closure="/nix/store/current-system",
+            upgraded_system_closure="/nix/store/upgraded-system",
+            diff="header one\nheader two\n[U.] package 1 -> 2\n",
+            changes=module.nvd.ChangeCounts(upgraded=1),
+        )
+        program = module.CliProgram(options, console, mock.Mock(), workflow)
+        program.run_privileged_activation = mock.Mock(
+            return_value=types.SimpleNamespace(system="switched")
+        )
+        return program, console
 
     def test_confirmed_upgrade_invokes_privileged_activation(self):
-        program = self.make_program(confirmed=True)
+        program, console = self.make_program(confirmed=True)
         with mock.patch.object(module.synsignals, "handle"):
-            with self.assertRaises(SystemExit):
-                program.upgrade_system()
+            status = program.run()
 
-        program.console.confirm.assert_called_once_with(
-            "package changes. Upgrade system? ([n]/y): "
+        self.assertEqual(status, 0)
+        console.confirm.assert_called_once_with(
+            "1 package changes: 1 upgraded. Upgrade system? ([n]/y): "
         )
         program.run_privileged_activation.assert_called_once_with()
-        program.exit_with_success.assert_called_once_with("system upgraded")
+        self.assertEqual(console.stdout.getvalue(), "system upgraded\n")
 
     def test_declined_upgrade_skips_privileged_activation(self):
-        program = self.make_program(confirmed=False)
+        program, console = self.make_program(confirmed=False)
         with mock.patch.object(module.synsignals, "handle"):
-            with self.assertRaises(SystemExit):
-                program.upgrade_system()
+            status = program.run()
 
-        program.console.confirm.assert_called_once()
+        self.assertEqual(status, 0)
+        console.confirm.assert_called_once()
         program.run_privileged_activation.assert_not_called()
-        program.exit_with_success.assert_called_once_with("nothing changed")
+        self.assertEqual(console.stdout.getvalue(), "nothing changed\n")
+
+
+if __name__ == "__main__":
+    unittest.main()

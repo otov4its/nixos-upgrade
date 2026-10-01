@@ -198,7 +198,7 @@ spec.loader.exec_module(module)
 
 activation.DEFAULT_SUDO_PATH = fake_sudo
 activation.HELPER_PATH = fake_helper
-module.CliProgram.get_current_system_closure = lambda self: current_system
+module.get_current_system_closure = lambda: current_system
 runner_class = module.command_runner.CommandRunner
 original_run = runner_class.run
 
@@ -219,7 +219,7 @@ def record_activation_options(runner, command, **kwargs):
 
 runner_class.run = record_activation_options
 sys.argv = [str(python_file), *args]
-module.CliProgram().main()
+raise SystemExit(module.main(args))
 PY
 }
 
