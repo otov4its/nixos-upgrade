@@ -12,6 +12,7 @@ export NAME=nixos-upgrade-test
 python3 - "$PYTHON_FILE" <<'PY'
 import importlib.util
 import logging
+import os
 import pathlib
 import sys
 import types
@@ -24,6 +25,7 @@ sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
 program = object.__new__(module.CliProgram)
+program.NAME = os.environ["NAME"]
 program.args = types.SimpleNamespace(verbosity=0, colored_stderr=False)
 logging.raiseExceptions = not __debug__
 program.get_logger()

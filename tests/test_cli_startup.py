@@ -57,7 +57,7 @@ class CliStartupTests(unittest.TestCase):
                 with mock.patch.object(
                     sys,
                     "argv",
-                    [module.CliProgram.NAME, option, "test-configuration"],
+                    ["nixos-upgrade-test", option, "test-configuration"],
                 ):
                     args = program.parse_args()
 
@@ -68,12 +68,12 @@ class CliStartupTests(unittest.TestCase):
 
     def test_configuration_defaults_to_hostname(self):
         program = object.__new__(module.CliProgram)
-        with mock.patch.object(sys, "argv", [module.CliProgram.NAME]):
+        with mock.patch.object(sys, "argv", ["nixos-upgrade-test"]):
             args = program.parse_args()
 
         self.assertEqual(
             getattr(args, "configuration", None),
-            module.CliProgram.HOSTNAME,
+            module.get_runtime_defaults().hostname,
         )
 
     def test_inputs_option_collects_input_names(self):
@@ -81,18 +81,18 @@ class CliStartupTests(unittest.TestCase):
         with mock.patch.object(
             sys,
             "argv",
-            [module.CliProgram.NAME, "--inputs", "nixpkgs", "home-manager"],
+            ["nixos-upgrade-test", "--inputs", "nixpkgs", "home-manager"],
         ):
             args = program.parse_args()
 
         self.assertEqual(
             getattr(args, "inputs", None),
-            ["nixpkgs", "home-manager"],
+            ("nixpkgs", "home-manager"),
         )
 
     def test_inputs_default_to_updating_all_inputs(self):
         program = object.__new__(module.CliProgram)
-        with mock.patch.object(sys, "argv", [module.CliProgram.NAME]):
+        with mock.patch.object(sys, "argv", ["nixos-upgrade-test"]):
             args = program.parse_args()
 
         self.assertIsNone(getattr(args, "inputs", None))
@@ -178,8 +178,18 @@ class CliStartupTests(unittest.TestCase):
                         "TemporaryDirectory",
                         side_effect=record_temporary_directory,
                     ),
-                    mock.patch.object(sys, "argv", [module.CliProgram.NAME, option]),
-                    mock.patch.dict(os.environ, {}, clear=True),
+                    mock.patch.object(
+                        module.CliProgram, "check_singleton"
+                    ) as check_singleton,
+                    mock.patch.object(
+                        module.CliProgram, "get_current_system_closure"
+                    ) as get_current_system_closure,
+                    mock.patch.object(sys, "argv", ["nixos-upgrade-test", option]),
+                    mock.patch.dict(
+                        os.environ,
+                        {"NAME": "nixos-upgrade-test", "VERSION": "test-version"},
+                        clear=True,
+                    ),
                     contextlib.redirect_stdout(output),
                     self.assertRaises(SystemExit) as error,
                 ):
@@ -187,10 +197,12 @@ class CliStartupTests(unittest.TestCase):
 
                 self.assertEqual(error.exception.code, 0)
                 self.assertEqual(created_directories, [])
+                check_singleton.assert_not_called()
+                get_current_system_closure.assert_not_called()
                 if option == "--help":
                     self.assertIn("usage:", output.getvalue())
                 else:
-                    self.assertIn(module.CliProgram.VERSION, output.getvalue())
+                    self.assertIn("test-version", output.getvalue())
 
         for temporary_directory in created_directories:
             temporary_directory.cleanup()
@@ -202,12 +214,13 @@ class CliStartupTests(unittest.TestCase):
         ):
             with self.subTest(option=option):
                 program = object.__new__(module.CliProgram)
+                program.runtime_defaults = module.get_runtime_defaults()
                 with (
                     mock.patch.dict(os.environ, {}, clear=True),
                     mock.patch.object(
                         sys,
                         "argv",
-                        [module.CliProgram.NAME, "--color", option],
+                        ["nixos-upgrade-test", "--color", option],
                     ),
                 ):
                     args = program.parse_args()

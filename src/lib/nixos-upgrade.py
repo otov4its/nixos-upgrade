@@ -3,13 +3,11 @@ import typing
 import sys
 import os
 import logging
-import argparse
 import re
 import types
 import subprocess
 import pathlib
 import socket
-import enum
 import fcntl
 import time
 import shutil
@@ -19,6 +17,7 @@ import activation
 import synsignals
 import colorformatter
 import nvd
+import cli_options
 
 import yaspin
 import yaspin.spinners
@@ -28,21 +27,24 @@ def stream_is_tty(stream: typing.TextIO | None) -> bool:
     return stream is not None and os.isatty(stream.fileno())
 
 
-class ColorOption(enum.StrEnum):
-    AUTO = enum.auto()
-    ALWAYS = enum.auto()
-    NEVER = enum.auto()
+ColorOption = cli_options.ColorOption
+
+
+def get_runtime_defaults() -> cli_options.RuntimeDefaults:
+    return cli_options.RuntimeDefaults(
+        name=os.environ["NAME"],
+        version=os.environ.get("VERSION", "development"),
+        hostname=socket.gethostname(),
+        default_flake=pathlib.Path("/etc/nixos/"),
+    )
 
 
 class CliProgram:
-    NAME = os.environ["NAME"]
-    VERSION = os.environ.get("VERSION", "development")
     NIXOS_FLAKE_DEFAULT_PATH = "/etc/nixos/"
     FLAKE_LOCK = "flake.lock"
     STDIN_IS_A_TTY = stream_is_tty(sys.__stdin__)
     STDOUT_IS_A_TTY = stream_is_tty(sys.__stdout__)
     STDERR_IS_A_TTY = stream_is_tty(sys.__stderr__)
-    HOSTNAME = socket.gethostname()
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
     POLLING_PROC_SECS = 0.1
@@ -57,6 +59,10 @@ class CliProgram:
 
     def __init__(self):
         self.running_subproc = None
+        self.runtime_defaults = get_runtime_defaults()
+        self.NAME = self.runtime_defaults.name
+        self.VERSION = self.runtime_defaults.version
+        self.HOSTNAME = self.runtime_defaults.hostname
         self.args = self.parse_args()
         self.logger = self.get_logger()
 
@@ -282,118 +288,31 @@ class CliProgram:
         return re.sub(termcolor_regex, "", text)
 
     def parse_args(self):
-        parser = argparse.ArgumentParser(
-            prog=self.NAME,
-            description="Updates nixos flake and shows changed packages",
-            exit_on_error=False,
-        )
+        if not hasattr(self, "runtime_defaults"):
+            self.runtime_defaults = get_runtime_defaults()
 
-        parser.add_argument(
-            "-V",
-            "--version",
-            action="version",
-            version=self.VERSION,
-        )
-
-        parser.add_argument(
-            "--flake",
-            help=(f"Nixos flake dir (default: {self.NIXOS_FLAKE_DEFAULT_PATH})"),
-            default=self.NIXOS_FLAKE_DEFAULT_PATH,
-            type=pathlib.Path,
-        )
-
-        parser.add_argument(
-            "-C",
-            "--configuration",
-            metavar="NAME",
-            help=(f"NixOS configuration to build (default: {self.HOSTNAME})"),
-            default=self.HOSTNAME,
-        )
-
-        lock_update_group = parser.add_mutually_exclusive_group()
-        lock_update_group.add_argument(
-            "-u",
-            "--no-update-lock-file",
-            action="store_true",
-            help=f"do not update {self.FLAKE_LOCK}",
-        )
-        lock_update_group.add_argument(
-            "--inputs",
-            metavar="NAME",
-            nargs="+",
-            help="update only the named flake inputs (default: update all)",
-        )
-
-        parser.add_argument(
-            "-m", "--commit-message", help="add a commit message", default="", type=str
-        )
-
-        assume_group = parser.add_mutually_exclusive_group()
-        assume_group.add_argument(
-            "-y",
-            "--assume-yes",
-            action="store_true",
-            help=(
-                "when a yes/no prompt would be presented, "
-                'assume that the user entered "yes". '
-                "In particular, suppresses the prompt that "
-                "appears when upgrading system."
-            ),
-        )
-
-        assume_group.add_argument(
-            "-n", "--assume-no", action="store_true", help="likewise --assume-yes"
-        )
-
-        parser.add_argument(
-            "-c", "--no-commit", action="store_true", help="do not commit a flake repo"
-        )
-
-        parser.add_argument(
-            "-v", "--verbose", action="count", default=0, help="increase verbosity"
-        )
-
-        parser.add_argument(
-            "-q", "--quiet", action="count", default=0, help="decrease verbosity"
-        )
-
-        parser.add_argument(
-            "--color",
-            choices=[
-                ColorOption.AUTO.value,
-                ColorOption.ALWAYS.value,
-                ColorOption.NEVER.value,
-            ],
-            default=ColorOption.AUTO,
-            help="when to display output using colors",
-        )
-
-        args = types.SimpleNamespace()
-
+        usage_error = None
         try:
-            args, argv = parser.parse_known_args()
-            if argv:
-                args._argv = argv
-            else:
-                args._argv = None
+            options = cli_options.parse_args(sys.argv[1:], self.runtime_defaults)
+        except cli_options.CliUsageError as error:
+            options = error.options
+            usage_error = error
 
-            args._error = None
+        if options.color is ColorOption.AUTO:
+            colored_stdout, colored_stderr = self.is_output_colored()
+        elif options.color is ColorOption.ALWAYS:
+            colored_stdout, colored_stderr = True, True
+            os.environ["FORCE_COLOR"] = "1"
+        else:
+            colored_stdout, colored_stderr = False, False
+            os.environ[self.NO_COLOR_ENV_NAME] = "1"
 
-            args.verbosity = args.verbose - args.quiet
-
-            if args.color == ColorOption.AUTO:
-                args.colored_stdout, args.colored_stderr = self.is_output_colored()
-            elif args.color == ColorOption.ALWAYS:
-                args.colored_stdout, args.colored_stderr = True, True
-                os.environ["FORCE_COLOR"] = "1"
-            elif args.color == ColorOption.NEVER:
-                args.colored_stdout, args.colored_stderr = False, False
-                os.environ[self.NO_COLOR_ENV_NAME] = "1"
-        except argparse.ArgumentError as e:
-            args._error = e
-            args.verbosity = 0
-            args.colored_stdout, args.colored_stderr = self.is_output_colored()
-
+        self.options = options
+        args = types.SimpleNamespace(**options.__dict__)
+        args._argv = None
+        args._error = usage_error
+        args.colored_stdout = colored_stdout
+        args.colored_stderr = colored_stderr
         return args
 
     @property
