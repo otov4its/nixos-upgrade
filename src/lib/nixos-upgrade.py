@@ -3,7 +3,6 @@ import typing
 import sys
 import os
 import logging
-import re
 import types
 import subprocess
 import pathlib
@@ -15,16 +14,13 @@ import tempfile
 
 import activation
 import synsignals
-import colorformatter
 import nvd
 import cli_options
-
-import yaspin
-import yaspin.spinners
+import console as console_module
 
 
 def stream_is_tty(stream: typing.TextIO | None) -> bool:
-    return stream is not None and os.isatty(stream.fileno())
+    return console_module.stream_is_tty(stream)
 
 
 ColorOption = cli_options.ColorOption
@@ -42,16 +38,14 @@ def get_runtime_defaults() -> cli_options.RuntimeDefaults:
 class CliProgram:
     NIXOS_FLAKE_DEFAULT_PATH = "/etc/nixos/"
     FLAKE_LOCK = "flake.lock"
-    STDIN_IS_A_TTY = stream_is_tty(sys.__stdin__)
-    STDOUT_IS_A_TTY = stream_is_tty(sys.__stdout__)
-    STDERR_IS_A_TTY = stream_is_tty(sys.__stderr__)
+
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
     POLLING_PROC_SECS = 0.1
     SIG_TO_TERM_SUBPROC = signal.SIGTERM
     SIG_TO_KILL_SUBPROC = signal.SIGKILL
     TERM_SUBPROC_TIMEOUT = 5
-    NO_COLOR_ENV_NAME = "NO_COLOR"
+
     NIX_EXTRA_EXPERIMENTAL_FEATURES = [
         "--extra-experimental-features",
         "nix-command flakes",
@@ -64,6 +58,9 @@ class CliProgram:
         self.VERSION = self.runtime_defaults.version
         self.HOSTNAME = self.runtime_defaults.hostname
         self.args = self.parse_args()
+        self.console = console_module.Console(self.options)
+        self.args.colored_stdout = self.console.colored_stdout
+        self.args.colored_stderr = self.console.colored_stderr
         self.logger = self.get_logger()
 
         # Arg errors after logger for fancy error messages
@@ -203,15 +200,12 @@ class CliProgram:
 
         if not stderr_out and with_spinner:
             self.spinner_start()
-        elif stderr_out and with_spinner and not self.STDERR_IS_A_TTY:
+        elif stderr_out and with_spinner and not self.console.stderr_is_tty:
             self.spinner_start()
 
         no_color = not self.colored_stderr
 
-        env = os.environ.copy()
-
-        if no_color:
-            env[self.NO_COLOR_ENV_NAME] = "1"
+        env = self.console.child_environment(os.environ)
 
         if env_to_update is not None:
             env.update(env_to_update)
@@ -245,7 +239,7 @@ class CliProgram:
                     line = self.clear_color(line)
                 stdout_data += line
                 if self.debug_mode:
-                    sys.stderr.write(line)
+                    self.console.stderr.write(line)
 
             # So as not to be intrusive
             time.sleep(self.POLLING_PROC_SECS)
@@ -260,7 +254,7 @@ class CliProgram:
         stdout_data += tail
 
         if tail and self.debug_mode:
-            sys.stderr.write(tail)
+            self.console.stderr.write(tail)
 
         retcode = proc.returncode
 
@@ -283,9 +277,8 @@ class CliProgram:
         )
 
     @staticmethod
-    def clear_color(text):
-        termcolor_regex = r"\033\[[0-9;]+m"
-        return re.sub(termcolor_regex, "", text)
+    def clear_color(text: str) -> str:
+        return console_module.Console.strip_color(text)
 
     def parse_args(self):
         if not hasattr(self, "runtime_defaults"):
@@ -298,106 +291,39 @@ class CliProgram:
             options = error.options
             usage_error = error
 
-        if options.color is ColorOption.AUTO:
-            colored_stdout, colored_stderr = self.is_output_colored()
-        elif options.color is ColorOption.ALWAYS:
-            colored_stdout, colored_stderr = True, True
-            os.environ["FORCE_COLOR"] = "1"
-        else:
-            colored_stdout, colored_stderr = False, False
-            os.environ[self.NO_COLOR_ENV_NAME] = "1"
-
         self.options = options
         args = types.SimpleNamespace(**options.__dict__)
         args._argv = None
         args._error = usage_error
-        args.colored_stdout = colored_stdout
-        args.colored_stderr = colored_stderr
         return args
 
     @property
     def colored_stdout(self):
-        return self.args.colored_stdout
+        return self.console.colored_stdout
 
     @property
     def colored_stderr(self):
-        return self.args.colored_stderr
-
-    # returns -> (stdout_colored: bool, stderr_colored: bool)
-    def is_output_colored(self) -> tuple[bool, bool]:
-        if "FORCE_COLOR" in os.environ:
-            return (True, True)
-
-        if (
-            self.NO_COLOR_ENV_NAME in os.environ
-            or "ANSI_COLORS_DISABLED" in os.environ
-            or os.environ.get("TERM") == "dumb"
-        ):
-            return (False, False)
-
-        return (self.STDOUT_IS_A_TTY, self.STDERR_IS_A_TTY)
-
-    def get_formatter(self):
-        return colorformatter.ColorFormatter(
-            self.get_fmt_str(), color=self.colored_stderr
-        )
-
-    def get_fmt_str(self):
-        return colorformatter.ColorFormatter.COLOR_FORMAT
+        return self.console.colored_stderr
 
     def get_logger(self) -> logging.Logger:
-        # Handler.handleError() resolves raiseExceptions in the logging module.
-        # https://docs.python.org/3/howto/logging.html#exceptions-raised-during-logging
-        logging.raiseExceptions = __debug__
-
-        stderr_handler = logging.StreamHandler()
-        stderr_handler.setFormatter(self.get_formatter())
-
-        logger = logging.getLogger(self.NAME)
-        logger.addHandler(stderr_handler)
-
-        self.config_verbosity(logger)
-
-        # Optimize unnecessary things
-        # See https://docs.python.org/3/howto/logging.html#optimization
-        logging._srcfile = None
-        logging.logThreads = False
-        logging.logProcesses = False
-        logging.logMultiprocessing = False
-
-        return logger
+        return self.console.logger
 
     def get_spinner(self):
-        if self.STDERR_IS_A_TTY and os.environ.get("TERM") != "dumb":
-            color = "green" if self.colored_stderr else None
-            return yaspin.yaspin(
-                yaspin.spinners.Spinners.point,
-                color=color,
-                stream=sys.stderr,
-            )
+        return self.console.spinner
 
     def spinner_start(self, color: str = "green"):
-        spinner = getattr(self, "spinner", None)
-        if spinner is not None:
-            if self.colored_stderr:
-                spinner.color = color
-            spinner.start()
+        self.console.start_spinner(color)
 
     def spinner_stop(self):
-        spinner = getattr(self, "spinner", None)
-        if spinner is not None:
-            spinner.stop()
+        self.console.stop_spinner()
 
-    def config_verbosity(self, logger):
-        match self.args.verbosity:
-            case _ if self.args.verbosity <= -1:
-                logger.setLevel(logging.ERROR)
-            case 0:
-                logger.setLevel(logging.WARNING)
-            case 1:
-                logger.setLevel(logging.INFO)
-            case _:
-                logger.setLevel(logging.DEBUG)
+    @property
+    def has_spinner(self) -> bool:
+        return self.console.spinner is not None
+
+    @property
+    def debug_mode(self) -> bool:
+        return self.console.debug_mode
 
     def get_nixos_flake_dir(self):
         flake_dir = self.args.flake
@@ -456,20 +382,9 @@ class CliProgram:
         if msg and level:
             self.logger.log(level, msg)
         elif msg:
-            print(msg)
+            print(msg, file=self.console.stdout)
 
         sys.exit(code)
-
-    @property
-    def has_spinner(self) -> bool:
-        if hasattr(self, "spinner") and self.spinner:
-            return True
-
-        return False
-
-    @property
-    def debug_mode(self) -> bool:
-        return self.logger.level == logging.DEBUG
 
     def has_pkgs_changes(self) -> bool:
         return nvd.count_changes(self.diff).total > 0
@@ -581,7 +496,7 @@ class CliProgram:
     @synsignals.add_handling
     def print_updates(self):
         self.diff = nvd.format_diff(self.diff)
-        print(self.diff)
+        self.console.display_diff(self.diff)
 
     def report_activation_result(self, result: activation.ActivationResult):
         self.logger.warning(
@@ -667,29 +582,7 @@ class CliProgram:
             + f"Upgrade system? ([{ANSWER_NO}]/{ANSWER_YES}): "
         )
 
-        assume_no = self.args.assume_no
-        assume_yes = self.args.assume_yes
-        assume_answer = assume_no or assume_yes
-
-        if self.STDIN_IS_A_TTY and not assume_answer:
-            if self.STDOUT_IS_A_TTY:
-                sys.stdout.write(prompt)
-            elif self.STDERR_IS_A_TTY:
-                sys.stderr.write(prompt)
-
-        if assume_no:
-            answer = ANSWER_NO
-        elif assume_yes:
-            answer = ANSWER_YES
-        else:
-            try:
-                answer = input()
-            except EOFError:
-                answer = ANSWER_NO
-
-        self.logger.warning(prompt + answer)
-
-        if answer.strip().casefold() in {"y", "yes"}:
+        if self.console.confirm(prompt):
             self.logger.info("switching to upgraded system...")
             result = self.run_privileged_activation()
 
@@ -715,10 +608,10 @@ class CliProgram:
     def std_streams_to_devnull(self):
         devnull = os.open(os.devnull, os.O_WRONLY)
 
-        if not self.STDOUT_IS_A_TTY:
+        if not self.console.stdout_is_tty:
             os.dup2(devnull, sys.stdout.fileno())
 
-        if not self.STDERR_IS_A_TTY:
+        if not self.console.stderr_is_tty:
             os.dup2(devnull, sys.stderr.fileno())
 
     def main(self):

@@ -11,6 +11,7 @@ readonly PYTHON_FILE="$PROJECT_ROOT/src/lib/nixos-upgrade.py"
 export NAME=nixos-upgrade-test
 python3 - "$PYTHON_FILE" <<'PY'
 import importlib.util
+import io
 import logging
 import os
 import pathlib
@@ -24,11 +25,9 @@ module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
 
-program = object.__new__(module.CliProgram)
-program.NAME = os.environ["NAME"]
-program.args = types.SimpleNamespace(verbosity=0, colored_stderr=False)
+options = module.cli_options.parse_args([], module.get_runtime_defaults())
 logging.raiseExceptions = not __debug__
-program.get_logger()
+module.console_module.Console(options, stderr=io.StringIO())
 
 assert logging.raiseExceptions is __debug__
 print("ok: logging.raiseExceptions is configured in the logging module")

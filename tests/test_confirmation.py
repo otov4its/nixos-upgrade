@@ -42,12 +42,11 @@ with mock.patch.dict(
 
 
 class ConfirmationTests(unittest.TestCase):
-    def make_program(self):
+    def make_program(self, *, confirmed):
         program = object.__new__(module.CliProgram)
-        program.args = types.SimpleNamespace(assume_no=False, assume_yes=False)
-        program.STDIN_IS_A_TTY = False
-        program.STDOUT_IS_A_TTY = False
-        program.STDERR_IS_A_TTY = False
+        program.args = types.SimpleNamespace()
+        program.console = mock.Mock()
+        program.console.confirm.return_value = confirmed
         program.logger = mock.Mock()
         program.get_changes_stat_str = lambda: "package changes"
         program.run_privileged_activation = mock.Mock(
@@ -57,30 +56,24 @@ class ConfirmationTests(unittest.TestCase):
         program.exit_with_error = mock.Mock(side_effect=SystemExit(1))
         return program
 
-    def test_accepts_y_or_yes_case_insensitively_after_trimming(self):
-        for answer in ("y", "Y", " yes ", "YeS"):
-            with self.subTest(answer=answer):
-                program = self.make_program()
-                with (
-                    mock.patch("builtins.input", return_value=answer),
-                    mock.patch.object(module.synsignals, "handle"),
-                ):
-                    with self.assertRaises(SystemExit):
-                        program.upgrade_system()
+    def test_confirmed_upgrade_invokes_privileged_activation(self):
+        program = self.make_program(confirmed=True)
+        with mock.patch.object(module.synsignals, "handle"):
+            with self.assertRaises(SystemExit):
+                program.upgrade_system()
 
-                program.run_privileged_activation.assert_called_once_with()
-                program.exit_with_success.assert_called_once_with("system upgraded")
+        program.console.confirm.assert_called_once_with(
+            "package changes. Upgrade system? ([n]/y): "
+        )
+        program.run_privileged_activation.assert_called_once_with()
+        program.exit_with_success.assert_called_once_with("system upgraded")
 
-    def test_other_answers_decline_without_privileged_activation(self):
-        for answer in ("n", "no", "", "anything else"):
-            with self.subTest(answer=answer):
-                program = self.make_program()
-                with (
-                    mock.patch("builtins.input", return_value=answer),
-                    mock.patch.object(module.synsignals, "handle"),
-                ):
-                    with self.assertRaises(SystemExit):
-                        program.upgrade_system()
+    def test_declined_upgrade_skips_privileged_activation(self):
+        program = self.make_program(confirmed=False)
+        with mock.patch.object(module.synsignals, "handle"):
+            with self.assertRaises(SystemExit):
+                program.upgrade_system()
 
-                program.run_privileged_activation.assert_not_called()
-                program.exit_with_success.assert_called_once_with("nothing changed")
+        program.console.confirm.assert_called_once()
+        program.run_privileged_activation.assert_not_called()
+        program.exit_with_success.assert_called_once_with("nothing changed")

@@ -15,8 +15,8 @@ import io
 import os
 import pathlib
 import sys
-import types
 import unittest
+from dataclasses import replace
 from unittest import mock
 
 module_path = pathlib.Path(sys.argv[1])
@@ -30,33 +30,51 @@ spec.loader.exec_module(module)
 class FakeSpinner:
     def __init__(self):
         self.color = None
+        self.started = False
+        self.stopped = False
 
     def start(self):
-        pass
+        self.started = True
 
     def stop(self):
-        pass
+        self.stopped = True
+
+
+class TerminalStream(io.StringIO):
+    def __init__(self, *, tty):
+        super().__init__()
+        self.tty = tty
+
+    def isatty(self):
+        return self.tty
 
 
 class SpinnerStreamTests(unittest.TestCase):
-    def make_program(self, *, stderr_tty, stdout_tty, colored_stderr=True):
-        program = object.__new__(module.CliProgram)
-        program.STDERR_IS_A_TTY = stderr_tty
-        program.STDOUT_IS_A_TTY = stdout_tty
-        program.args = types.SimpleNamespace(
-            colored_stderr=colored_stderr,
-            colored_stdout=True,
+    def make_console(
+        self, *, stderr_tty, stdout_tty, colored_stderr=True, stdout=None, stderr=None
+    ):
+        defaults = module.cli_options.RuntimeDefaults(
+            name="nixos-upgrade-test",
+            version="test",
+            hostname="test-host",
+            default_flake=pathlib.Path("/etc/nixos"),
         )
-        return program
+        options = module.cli_options.parse_args([], defaults)
+        color = (
+            module.cli_options.ColorOption.ALWAYS
+            if colored_stderr
+            else module.cli_options.ColorOption.NEVER
+        )
+        options = replace(options, color=color)
+        return module.console_module.Console(
+            options,
+            stdout=stdout if stdout is not None else TerminalStream(tty=stdout_tty),
+            stderr=stderr if stderr is not None else TerminalStream(tty=stderr_tty),
+        )
 
     def assert_stderr_spinner(self, *, colored_stderr, expected_color):
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        program = self.make_program(
-            stderr_tty=True,
-            stdout_tty=True,
-            colored_stderr=colored_stderr,
-        )
+        stdout = TerminalStream(tty=True)
+        stderr = TerminalStream(tty=True)
         spinner = FakeSpinner()
 
         def make_spinner(*args, color, stream):
@@ -65,19 +83,32 @@ class SpinnerStreamTests(unittest.TestCase):
             return spinner
 
         with (
-            mock.patch.dict(os.environ, {"TERM": "xterm"}),
-            mock.patch.object(module.yaspin, "yaspin", make_spinner),
+            mock.patch.dict(
+                os.environ,
+                {"NAME": "nixos-upgrade-test", "TERM": "xterm"},
+                clear=True,
+            ),
+            mock.patch.object(
+                module.console_module.yaspin, "yaspin", make_spinner
+            ),
             mock.patch("sys.stdout", stdout),
-            mock.patch("sys.stderr", stderr),
         ):
-            program.spinner = program.get_spinner()
-            self.assertIs(program.spinner, spinner)
-            self.assertIs(sys.stdout, stdout)
-            program.spinner_start()
+            console = self.make_console(
+                stderr_tty=True,
+                stdout_tty=True,
+                colored_stderr=colored_stderr,
+                stdout=stdout,
+                stderr=stderr,
+            )
+            self.assertIs(console.spinner, spinner)
+            console.start_spinner()
             self.assertEqual(spinner.color, expected_color)
             self.assertIs(sys.stdout, stdout)
-            program.spinner_stop()
+            console.stop_spinner()
             self.assertIs(sys.stdout, stdout)
+
+        self.assertTrue(spinner.started)
+        self.assertTrue(spinner.stopped)
 
     def test_prefers_stderr_without_redirecting_stdout(self):
         self.assert_stderr_spinner(colored_stderr=True, expected_color="green")
@@ -86,24 +117,34 @@ class SpinnerStreamTests(unittest.TestCase):
         self.assert_stderr_spinner(colored_stderr=False, expected_color=None)
 
     def test_dumb_terminal_disables_spinner(self):
-        program = self.make_program(stderr_tty=True, stdout_tty=True)
-
         with (
-            mock.patch.dict(os.environ, {"TERM": "dumb"}),
-            mock.patch.object(module.yaspin, "yaspin") as make_spinner,
+            mock.patch.dict(
+                os.environ,
+                {"NAME": "nixos-upgrade-test", "TERM": "dumb"},
+                clear=True,
+            ),
+            mock.patch.object(module.console_module.yaspin, "yaspin") as factory,
         ):
-            self.assertIsNone(program.get_spinner())
-            make_spinner.assert_not_called()
+            console = self.make_console(stderr_tty=True, stdout_tty=True)
+            console.start_spinner()
+
+        self.assertIsNone(console.spinner)
+        factory.assert_not_called()
 
     def test_does_not_fall_back_to_stdout_when_stderr_is_not_a_tty(self):
-        program = self.make_program(stderr_tty=False, stdout_tty=True)
-
         with (
-            mock.patch.dict(os.environ, {"TERM": "xterm"}),
-            mock.patch.object(module.yaspin, "yaspin") as make_spinner,
+            mock.patch.dict(
+                os.environ,
+                {"NAME": "nixos-upgrade-test", "TERM": "xterm"},
+                clear=True,
+            ),
+            mock.patch.object(module.console_module.yaspin, "yaspin") as factory,
         ):
-            self.assertIsNone(program.get_spinner())
-            make_spinner.assert_not_called()
+            console = self.make_console(stderr_tty=False, stdout_tty=True)
+            console.start_spinner()
+
+        self.assertIsNone(console.spinner)
+        factory.assert_not_called()
 
 
 unittest.main(argv=[sys.argv[0]])

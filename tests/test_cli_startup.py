@@ -24,6 +24,7 @@ yaspin = types.ModuleType("yaspin")
 yaspin.__path__ = []
 setattr(yaspin, "yaspin", lambda *args, **kwargs: None)
 spinners = types.ModuleType("yaspin.spinners")
+setattr(spinners, "Spinners", types.SimpleNamespace(point=object()))
 setattr(yaspin, "spinners", spinners)
 
 with mock.patch.dict(
@@ -108,12 +109,14 @@ class CliStartupTests(unittest.TestCase):
         )
 
     def make_program(self):
+        options = module.cli_options.parse_args([], module.get_runtime_defaults())
+
+        def parse_args(program):
+            program.options = options
+            return self.make_args()
+
         with (
-            mock.patch.object(
-                module.CliProgram,
-                "parse_args",
-                return_value=self.make_args(),
-            ),
+            mock.patch.object(module.CliProgram, "parse_args", new=parse_args),
             mock.patch.object(
                 module.CliProgram, "get_logger", return_value=mock.Mock()
             ),
@@ -207,7 +210,7 @@ class CliStartupTests(unittest.TestCase):
         for temporary_directory in created_directories:
             temporary_directory.cleanup()
 
-    def test_color_options_set_environment_for_subprocesses(self):
+    def test_color_options_set_child_environment_without_mutating_parent(self):
         for option, variable in (
             ("always", "FORCE_COLOR"),
             ("never", "NO_COLOR"),
@@ -216,7 +219,11 @@ class CliStartupTests(unittest.TestCase):
                 program = object.__new__(module.CliProgram)
                 program.runtime_defaults = module.get_runtime_defaults()
                 with (
-                    mock.patch.dict(os.environ, {}, clear=True),
+                    mock.patch.dict(
+                        os.environ,
+                        {"NAME": "nixos-upgrade-test", "TERM": "xterm"},
+                        clear=True,
+                    ),
                     mock.patch.object(
                         sys,
                         "argv",
@@ -224,5 +231,11 @@ class CliStartupTests(unittest.TestCase):
                     ),
                 ):
                     args = program.parse_args()
-                    self.assertEqual(args.color, option)
-                    self.assertEqual(os.environ.get(variable), "1")
+                    self.assertEqual(args.color, module.ColorOption(option))
+                    self.assertNotIn(variable, os.environ)
+
+                    console = module.console_module.Console(program.options)
+                    child_environment = console.child_environment(os.environ)
+
+                    self.assertEqual(child_environment.get(variable), "1")
+                    self.assertNotIn(variable, os.environ)

@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-* Begin behavior-preserving Python CLI modularization with typed option parsing.
+* Modularize the Python CLI into typed options and an isolated terminal console
+  for logging, color, spinner, and prompt behavior.
 * Add a shared Treefmt configuration for Nix, Python, Bash, TOML, Markdown,
   and JSON/JSONC; expose it through `nix fmt` and enforce it in `nix flake check`.
 * Remove YAPF from the development environment in favor of Ruff formatting.
