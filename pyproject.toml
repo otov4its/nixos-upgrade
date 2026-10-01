@@ -14,5 +14,7 @@ max-complexity = 13
 [tool.basedpyright]
 include = ["src/lib"]
 extraPaths = ["src/lib"]
+exclude = ["tests"]
+ignore = ["tests"]
 pythonVersion = "3.13"
 typeCheckingMode = "basic"
