@@ -3,7 +3,8 @@
 ## Unreleased
 
 * Modularize the Python CLI into typed options, an isolated terminal console,
-  and a subprocess runner with explicit stderr and signal-cleanup policies.
+  a subprocess runner with explicit stderr and signal-cleanup policies, and a Nix
+  workflow with typed preparation outcomes.
 * Add a shared Treefmt configuration for Nix, Python, Bash, TOML, Markdown,
   and JSON/JSONC; expose it through `nix fmt` and enforce it in `nix flake check`.
 * Remove YAPF from the development environment in favor of Ruff formatting.

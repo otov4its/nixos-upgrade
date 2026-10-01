@@ -4,7 +4,7 @@ import sys
 import os
 import logging
 import types
-import subprocess
+
 import pathlib
 import socket
 import fcntl
@@ -17,6 +17,7 @@ import nvd
 import cli_options
 import command_runner
 import console as console_module
+import nix_workflow
 
 
 def stream_is_tty(stream: typing.TextIO | None) -> bool:
@@ -37,17 +38,10 @@ def get_runtime_defaults() -> cli_options.RuntimeDefaults:
 
 class CliProgram:
     NIXOS_FLAKE_DEFAULT_PATH = "/etc/nixos/"
-    FLAKE_LOCK = "flake.lock"
-
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
     POLLING_PROC_SECS = 0.1
     TERM_SUBPROC_TIMEOUT = 5
-
-    NIX_EXTRA_EXPERIMENTAL_FEATURES = [
-        "--extra-experimental-features",
-        "nix-command flakes",
-    ]
 
     def __init__(self):
         self.runtime_defaults = get_runtime_defaults()
@@ -80,12 +74,21 @@ class CliProgram:
 
         self.temporary_directory = tempfile.TemporaryDirectory(prefix=f"{self.NAME}-")
         self.temporary_path = pathlib.Path(self.temporary_directory.name)
-        self.lock_file_path = self.temporary_path / self.FLAKE_LOCK
-        self.result_link = self.temporary_path / "result"
+        self.workspace = nix_workflow.NixWorkspace(
+            lock_file_path=self.temporary_path / "flake.lock",
+            result_link=self.temporary_path / "result",
+        )
         self.spinner = self.get_spinner()
         self.current_system_closure = self.get_current_system_closure()
+        self.nix_workflow = nix_workflow.NixWorkflow(
+            options=self.options,
+            runner=self.runner,
+            workspace=self.workspace,
+            current_system_closure=self.current_system_closure,
+        )
         self.upgraded_system_closure = None
         self.diff = ""
+        self.changes = nvd.ChangeCounts()
         self.setup_signals()
         self.setup_excepthook()
 
@@ -150,44 +153,6 @@ class CliProgram:
         self.logger.debug(f"{current_system_closure=}")
         return current_system_closure
 
-    def run_cmd(
-        self,
-        cmd: typing.List[str],
-        desc="",
-        msg_on_success="",
-        *,
-        stderr_out=False,
-        with_spinner=True,
-        exit_on_error=True,
-        msg_on_success_loglevel=logging.INFO,
-        env_to_update: typing.Mapping[str, str] | None = None,
-    ) -> subprocess.CompletedProcess[str]:
-        output_policy = (
-            command_runner.OutputPolicy.INHERIT_STDERR
-            if stderr_out
-            else command_runner.OutputPolicy.MERGE_STDERR
-        )
-        if desc:
-            self.logger.info(desc)
-        self.logger.debug("> " + " ".join(cmd))
-
-        completed = self.runner.run(
-            cmd,
-            output_policy=output_policy,
-            with_spinner=with_spinner,
-            env_updates=env_to_update,
-            log_command=False,
-        )
-
-        if completed.returncode != os.EX_OK:
-            if exit_on_error:
-                self.exit_with_error(code=completed.returncode)
-        elif msg_on_success:
-            self.logger.log(msg_on_success_loglevel, msg_on_success)
-
-        self.logger.debug("> done")
-        return completed
-
     @staticmethod
     def clear_color(text: str) -> str:
         return console_module.Console.strip_color(text)
@@ -237,33 +202,6 @@ class CliProgram:
     def debug_mode(self) -> bool:
         return self.console.debug_mode
 
-    def get_nixos_flake_dir(self):
-        flake_dir = self.args.flake
-        self.logger.debug(f"{flake_dir=}")
-
-        try:
-            resolved_flake_dir = flake_dir.resolve(strict=True)
-        except OSError:
-            self.exit_with_error(f"{flake_dir}: no such directory")
-
-        self.logger.debug(f"  resolved to {resolved_flake_dir!r}")
-        if not resolved_flake_dir.is_dir():
-            self.exit_with_error(f"{resolved_flake_dir}: no such directory")
-        if not (resolved_flake_dir / "flake.nix").is_file():
-            self.exit_with_error(f"{resolved_flake_dir}: this dir is not a flake")
-
-        if self.args.no_update_lock_file:
-            source_lock_file = resolved_flake_dir / self.FLAKE_LOCK
-            if source_lock_file.is_file():
-                try:
-                    shutil.copyfile(source_lock_file, self.lock_file_path)
-                except OSError as error:
-                    self.exit_with_error(
-                        f"preparing temporary lock file failed: {error}"
-                    )
-
-        return str(resolved_flake_dir)
-
     def get_sig_received_msg(self, signum: int):
         return f"'{signal.strsignal(signum)}' signal received"
 
@@ -298,109 +236,33 @@ class CliProgram:
 
         sys.exit(code)
 
-    def has_pkgs_changes(self) -> bool:
-        return nvd.count_changes(self.diff).total > 0
-
     def get_changes_stat_str(self):
-        return nvd.format_change_summary(nvd.count_changes(self.diff))
+        return nvd.format_change_summary(self.changes)
 
     @synsignals.add_handling
-    def check_flake_dir(self):
-        self.args.flake = self.get_nixos_flake_dir()
-        self.logger.info(f"found a nixos flake '{self.args.flake}'")
-
-    @synsignals.add_handling
-    def update_lock_file(self):
-        command = [
-            "nix",
-            *self.NIX_EXTRA_EXPERIMENTAL_FEATURES,
-            "flake",
-            "update",
-        ]
-        if self.args.inputs:
-            command.extend(self.args.inputs)
-        command.extend(
-            [
-                "--flake",
-                str(self.args.flake),
-                "--output-lock-file",
-                str(self.lock_file_path),
-            ]
-        )
-        update = self.run_cmd(
-            command,
-            "updating flake lock file...",
-            exit_on_error=False,
-            stderr_out=True,
-        )
-
-        if update.returncode != 0 or not self.lock_file_path.is_file():
-            self.exit_with_error(
-                "updating lock file error", update.returncode or self.EXIT_ERR_CODE
-            )
-
-    @synsignals.add_handling
-    def build_nixos_system(self):
-        nixos_config = (
-            f"{self.args.flake}#nixosConfigurations."
-            f"{self.args.configuration}.config.system.build.toplevel"
-        )
-        self.logger.debug(f"{nixos_config=}")
-
-        command = [
-            "nix",
-            *self.NIX_EXTRA_EXPERIMENTAL_FEATURES,
-            "build",
-            "--out-link",
-            str(self.result_link),
-            "--no-write-lock-file",
-        ]
-        if self.lock_file_path.is_file():
-            command.extend(
-                [
-                    "--reference-lock-file",
-                    str(self.lock_file_path),
-                ]
-            )
-        command.append(nixos_config)
-
-        build = self.run_cmd(
-            command,
-            "building nixos system...",
-            exit_on_error=False,
-            stderr_out=True,
-        )
-        if build.returncode != 0:
-            self.exit_with_error(
-                "building nixos system subprocess error",
-                build.returncode,
-            )
-
+    def validate_flake(self):
         try:
-            self.upgraded_system_closure = str(self.result_link.resolve(strict=True))
-        except OSError:
-            self.exit_with_error("could not resolve built system closure")
+            flake_dir = self.nix_workflow.validate_flake()
+        except nix_workflow.NixWorkflowError as error:
+            self.exit_with_error(error.message, error.exit_code)
 
-        self.logger.debug(f"{self.upgraded_system_closure=}")
+        self.args.flake = flake_dir
+        self.logger.info(f"found a nixos flake '{flake_dir}'")
 
     @synsignals.add_handling
-    def diff_closures(self):
-        if self.current_system_closure == self.upgraded_system_closure:
+    def prepare_upgrade(self):
+        try:
+            outcome = self.nix_workflow.prepare(self.args.flake)
+        except nix_workflow.NixWorkflowError as error:
+            self.exit_with_error(error.message, error.exit_code)
+
+        if isinstance(outcome, nix_workflow.NoChanges):
             self.exit_with_success("no changes found")
 
-        diff = self.run_cmd(
-            [
-                "nvd",
-                "--color=always",
-                "diff",
-                str(self.current_system_closure),
-                str(self.upgraded_system_closure),
-            ],
-            "Comparing derivations...",
-        )
-        self.diff = diff.stdout or ""
-
-        if self.has_pkgs_changes():
+        self.upgraded_system_closure = outcome.upgraded_system_closure
+        self.diff = outcome.diff
+        self.changes = outcome.changes
+        if self.changes.total > 0:
             self.logger.warning("package changes found")
         else:
             self.logger.warning("config changes found")
@@ -435,7 +297,7 @@ class CliProgram:
     def run_privileged_activation(self) -> activation.ActivationResult:
         try:
             lock_file_bytes = (
-                self.lock_file_path.read_bytes()
+                self.workspace.lock_file_path.read_bytes()
                 if not self.args.no_update_lock_file
                 else None
             )
@@ -529,11 +391,8 @@ class CliProgram:
 
     def main(self):
         try:
-            self.check_flake_dir()
-            if not self.args.no_update_lock_file:
-                self.update_lock_file()
-            self.build_nixos_system()
-            self.diff_closures()
+            self.validate_flake()
+            self.prepare_upgrade()
             self.print_updates()
             self.upgrade_system()
         except BrokenPipeError:
