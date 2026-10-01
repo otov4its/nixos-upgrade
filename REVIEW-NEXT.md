@@ -70,9 +70,9 @@ owner.
   handles them at safe points. This is retained intentionally to avoid
   interrupting critical work; the simpler exception-based handler proposed in
   the old B.5 is not the chosen design.
-- **B.7 Python tooling (accepted):** Keep Ruff's conservative lint rules and
-  BasedPyright's basic mode. Enforce Ruff formatting through Treefmt; consider
-  expanding style or complexity rules separately if the project needs them.
+- **B.7 Python tooling (accepted):** Use Ruff's conservative lint rules plus
+  McCabe `C901` with a maximum complexity of 13, and BasedPyright's basic mode.
+  Enforce Ruff formatting through Treefmt; additional rules remain optional.
 - **B.8 version convention (accepted):** Use SemVer with the date as build
   metadata: `X.Y.Z+YYYYMMDD` for a release and `X.Y.Z-rc+YYYYMMDD` for a
   release candidate (for example, `2.0.0-rc+20260929`). `package.nix` is the

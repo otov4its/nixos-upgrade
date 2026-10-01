@@ -8,6 +8,7 @@
 * Add a shared Treefmt configuration for Nix, Python, Bash, TOML, Markdown,
   and JSON/JSONC; expose it through `nix fmt` and enforce it in `nix flake check`.
 * Remove YAPF from the development environment in favor of Ruff formatting.
+* Enable Ruff's McCabe `C901` complexity rule with a maximum complexity of 13.
 
 * Use SemVer release versions with date build metadata and `-rc` pre-release
   versions (for example, `2.0.0-rc+20260929`).
