@@ -183,7 +183,6 @@ import importlib.util
 import json
 import os
 import pathlib
-import subprocess
 import sys
 
 python_file = pathlib.Path(sys.argv[1])
@@ -200,21 +199,25 @@ spec.loader.exec_module(module)
 activation.DEFAULT_SUDO_PATH = fake_sudo
 activation.HELPER_PATH = fake_helper
 module.CliProgram.get_current_system_closure = lambda self: current_system
-original_run = module.subprocess.run
+runner_class = module.command_runner.CommandRunner
+original_run = runner_class.run
 
-def record_activation_options(command, **kwargs):
+def record_activation_options(runner, command, **kwargs):
     if fake_sudo in command:
         pathlib.Path(os.environ["TEST_SUDO_OPTIONS"]).write_text(json.dumps({
             "argv": command,
-            "start_new_session": kwargs.get("start_new_session", False),
-            "stdout_is_pipe": kwargs.get("stdout") == subprocess.PIPE,
-            "stderr_is_inherited": kwargs.get("stderr") is None,
-            "text": kwargs.get("text"),
-            "check": kwargs.get("check"),
+            "start_new_session": kwargs.get("start_new_session", True),
+            "stderr_is_inherited": (
+                kwargs.get("output_policy")
+                is module.command_runner.OutputPolicy.INHERIT_STDERR
+            ),
+            "stdin_data_is_present": kwargs.get("stdin_data") is not None,
+            "log_command": kwargs.get("log_command"),
+            "log_failure": kwargs.get("log_failure"),
         }))
-    return original_run(command, **kwargs)
+    return original_run(runner, command, **kwargs)
 
-module.subprocess.run = record_activation_options
+runner_class.run = record_activation_options
 sys.argv = [str(python_file), *args]
 module.CliProgram().main()
 PY
@@ -280,8 +283,9 @@ assert "added-package" in commit_message, commit_message
 options = json.loads(options_path.read_text())
 assert options["argv"][0].endswith("/env"), options
 assert options["start_new_session"] is False, options
-assert options["stdout_is_pipe"] and options["stderr_is_inherited"], options
-assert options["text"] is True and options["check"] is False, options
+assert options["stderr_is_inherited"], options
+assert options["stdin_data_is_present"], options
+assert options["log_command"] is False and options["log_failure"] is False, options
 PY
 
 grep -Fq 'lock' "$TEST_ROOT/confirmed.err"

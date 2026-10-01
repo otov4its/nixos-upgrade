@@ -8,7 +8,6 @@ import subprocess
 import pathlib
 import socket
 import fcntl
-import time
 import shutil
 import tempfile
 
@@ -16,6 +15,7 @@ import activation
 import synsignals
 import nvd
 import cli_options
+import command_runner
 import console as console_module
 
 
@@ -42,8 +42,6 @@ class CliProgram:
     EXIT_ERR_CODE = 1
     EXIT_SIG_CODE_SHIFT = 128
     POLLING_PROC_SECS = 0.1
-    SIG_TO_TERM_SUBPROC = signal.SIGTERM
-    SIG_TO_KILL_SUBPROC = signal.SIGKILL
     TERM_SUBPROC_TIMEOUT = 5
 
     NIX_EXTRA_EXPERIMENTAL_FEATURES = [
@@ -52,7 +50,6 @@ class CliProgram:
     ]
 
     def __init__(self):
-        self.running_subproc = None
         self.runtime_defaults = get_runtime_defaults()
         self.NAME = self.runtime_defaults.name
         self.VERSION = self.runtime_defaults.version
@@ -73,6 +70,11 @@ class CliProgram:
                 "unrecognized arguments: " + " ".join(self.args._argv),
             )
 
+        self.runner = command_runner.CommandRunner(
+            self.console,
+            poll_interval=self.POLLING_PROC_SECS,
+            terminate_timeout=self.TERM_SUBPROC_TIMEOUT,
+        )
         self.singleton_lock_fd = None
         self.check_singleton()
 
@@ -131,36 +133,8 @@ class CliProgram:
 
     def termination_signal_handler(self, signum, frame):
         self.spinner_stop()
-
         self.logger.error(self.get_sig_received_msg(signum))
-
-        if self.running_subproc:
-            proc = self.running_subproc
-
-            if proc.returncode is None:
-                self.logger.warning("terminating running subprocess...")
-                os.killpg(proc.pid, self.SIG_TO_TERM_SUBPROC)
-
-            self.spinner_start("yellow")
-
-            try:
-                # Waiting for termination
-                proc.communicate(timeout=self.TERM_SUBPROC_TIMEOUT)
-            except subprocess.TimeoutExpired:
-                # Last resort
-                os.killpg(proc.pid, self.SIG_TO_KILL_SUBPROC)
-
-                self.spinner_stop()
-                self.logger.warning(
-                    "  SIGKILL has been sent to the subprocess as a last resort"
-                )
-
-                proc.communicate()
-
-            self.spinner_stop()
-
-            self.logger.warning("ok")
-
+        self.runner.terminate_active()
         self.exit_with_error(None, self.get_sig_exit_code(signum))
 
     def exception_handler(self, exc_type, exc_value, exc_traceback):
@@ -187,94 +161,32 @@ class CliProgram:
         exit_on_error=True,
         msg_on_success_loglevel=logging.INFO,
         env_to_update: typing.Mapping[str, str] | None = None,
-        **kwargs,
     ) -> subprocess.CompletedProcess[str]:
-        stderr_out = self.debug_mode or stderr_out
-
+        output_policy = (
+            command_runner.OutputPolicy.INHERIT_STDERR
+            if stderr_out
+            else command_runner.OutputPolicy.MERGE_STDERR
+        )
         if desc:
             self.logger.info(desc)
+        self.logger.debug("> " + " ".join(cmd))
 
-        command = " ".join(cmd)
-
-        self.logger.debug("> " + command)
-
-        if not stderr_out and with_spinner:
-            self.spinner_start()
-        elif stderr_out and with_spinner and not self.console.stderr_is_tty:
-            self.spinner_start()
-
-        no_color = not self.colored_stderr
-
-        env = self.console.child_environment(os.environ)
-
-        if env_to_update is not None:
-            env.update(env_to_update)
-
-        proc = subprocess.Popen(
+        completed = self.runner.run(
             cmd,
-            stderr=subprocess.STDOUT if not stderr_out else None,
-            stdout=subprocess.PIPE,
-            env=env,
-            start_new_session=True,
-            text=True,
-            **kwargs,
+            output_policy=output_policy,
+            with_spinner=with_spinner,
+            env_updates=env_to_update,
+            log_command=False,
         )
 
-        self.running_subproc = proc
-
-        stdout = proc.stdout
-        if stdout is None:
-            raise RuntimeError("subprocess stdout pipe was not created")
-
-        os.set_blocking(stdout.fileno(), False)
-
-        stdout_data = ""
-        while proc.poll() is None:
-            # While a subprocess is running
-            # it's possible that a signal is received
-            synsignals.handle()
-
-            while line := stdout.readline():
-                if no_color:
-                    line = self.clear_color(line)
-                stdout_data += line
-                if self.debug_mode:
-                    self.console.stderr.write(line)
-
-            # So as not to be intrusive
-            time.sleep(self.POLLING_PROC_SECS)
-
-        self.running_subproc = None
-
-        self.spinner_stop()
-
-        tail = stdout.read()
-        if no_color:
-            tail = self.clear_color(tail)
-        stdout_data += tail
-
-        if tail and self.debug_mode:
-            self.console.stderr.write(tail)
-
-        retcode = proc.returncode
-
-        if retcode != os.EX_OK:
-            msg = f"`{command}` subprocess error"
-            self.logger.error(msg)
-
+        if completed.returncode != os.EX_OK:
             if exit_on_error:
-                self.exit_with_error(code=retcode)
-        else:
-            if msg_on_success:
-                self.logger.log(msg_on_success_loglevel, msg_on_success)
+                self.exit_with_error(code=completed.returncode)
+        elif msg_on_success:
+            self.logger.log(msg_on_success_loglevel, msg_on_success)
 
         self.logger.debug("> done")
-        return subprocess.CompletedProcess(
-            args=cmd,
-            returncode=retcode,
-            stdout=stdout_data,
-            stderr=None,
-        )
+        return completed
 
     @staticmethod
     def clear_color(text: str) -> str:
@@ -552,13 +464,14 @@ class CliProgram:
 
         with synsignals.BlockedHandling():
             try:
-                completed = subprocess.run(
+                completed = self.runner.run(
                     command,
-                    input=manifest,
-                    stdout=subprocess.PIPE,
-                    stderr=None,
-                    text=True,
-                    check=False,
+                    output_policy=command_runner.OutputPolicy.INHERIT_STDERR,
+                    with_spinner=False,
+                    stdin_data=manifest,
+                    start_new_session=False,
+                    log_command=False,
+                    log_failure=False,
                 )
                 result = activation.parse_activation_result(
                     completed.stdout,
