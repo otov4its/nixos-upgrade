@@ -2,18 +2,21 @@
 
 ## Unreleased
 
+- Nothing yet.
+
+## 2.0.0+20261003
+
 - Add project-specific agent guidance and include root-level files in Treefmt's
   formatter checks.
 - Record key architecture rationales as ADRs and remove completed review and
   implementation-planning artifacts.
-- Modularize the Python CLI into typed options, an isolated terminal console,
-  a subprocess runner, a Nix workflow with typed outcomes, and a thin application
+- Modularize the Python CLI into typed options, an isolated terminal console, a
+  subprocess runner, a Nix workflow with typed outcomes, and a thin application
   controller, without changing the CLI or runtime behavior.
 - Add a shared Treefmt configuration for Nix, Python, Bash, TOML, Markdown,
   and JSON/JSONC; expose it through `nix fmt` and enforce it in `nix flake check`.
 - Remove YAPF from the development environment in favor of Ruff formatting.
 - Enable Ruff's McCabe `C901` complexity rule with a maximum complexity of 13.
-
 - Use SemVer release versions with date build metadata and numbered `-rc.N`
   pre-release versions (for example, `2.0.0-rc.1+20260929`).
 - Clarify release checklist steps for validation, branch/tag safety, and publishing;
