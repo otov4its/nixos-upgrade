@@ -18,6 +18,7 @@
   pre-release versions (for example, `2.0.0-rc.1+20260929`).
 - Clarify release checklist steps for validation, branch/tag safety, and publishing;
   exempt metadata-only version bumps from changelog entries.
+- Add a repository-local release skill that directs agents to the checklist.
 - Add `-C, --configuration NAME` to select a NixOS flake configuration; default
   to the current hostname.
 - Add `--inputs NAME [NAME ...]` to update selected flake inputs; omitting it
