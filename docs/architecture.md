@@ -90,6 +90,15 @@ The helper commits with `git commit --all` as the repository owner. This can
 include any modified tracked files, not only files changed for the upgrade;
 untracked files are not included.
 
+## Decision records
+
+The rationale and trade-offs behind the major architecture choices are recorded
+in these ADRs:
+
+- [Unprivileged controller and sudo activation](decisions/0001-unprivileged-controller-sudo-activation.md)
+- [Git-indexed flake source and auto-commit policy](decisions/0002-git-indexed-flake-source-and-auto-commit.md)
+- [Host overlay and pinned standalone package](decisions/0003-host-overlay-and-pinned-standalone-package.md)
+
 ## Validation pointers
 
 Run `nix flake check` for the project checks. Relevant focused coverage includes:

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+* Record key architecture rationales as ADRs and remove completed review and
+  implementation-planning artifacts.
 * Modularize the Python CLI into typed options, an isolated terminal console,
   a subprocess runner, a Nix workflow with typed outcomes, and a thin application
   controller, without changing the CLI or runtime behavior.
