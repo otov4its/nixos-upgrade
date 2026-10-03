@@ -14,8 +14,10 @@
 - Remove YAPF from the development environment in favor of Ruff formatting.
 - Enable Ruff's McCabe `C901` complexity rule with a maximum complexity of 13.
 
-- Use SemVer release versions with date build metadata and `-rc` pre-release
-  versions (for example, `2.0.0-rc+20260929`).
+- Use SemVer release versions with date build metadata and numbered `-rc.N`
+  pre-release versions (for example, `2.0.0-rc.1+20260929`).
+- Clarify release checklist steps for validation, branch/tag safety, and publishing;
+  exempt metadata-only version bumps from changelog entries.
 - Add `-C, --configuration NAME` to select a NixOS flake configuration; default
   to the current hostname.
 - Add `--inputs NAME [NAME ...]` to update selected flake inputs; omitting it

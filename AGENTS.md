@@ -45,4 +45,5 @@
 
 - Preserve unrelated user changes; do not stage or commit unless requested.
 - Before a requested commit, add an appropriate `Unreleased` entry to
-  `CHANGELOG.md`.
+  `CHANGELOG.md`, except for metadata-only version-bump commits performed as
+  specified by `RELEASE_CHECKLIST.md`.
