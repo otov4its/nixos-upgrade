@@ -20,7 +20,7 @@
 
 let
   name = "nixos-upgrade";
-  version = "2.0.0+20261003";
+  version = "2.0.1-rc.1+20261003";
   description = "NixOS upgrade showing what will be changed";
 
   binSrc = "./bin/${name}";
