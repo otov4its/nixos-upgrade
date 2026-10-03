@@ -1,28 +1,39 @@
 [formatter.nix]
 command = "nixfmt"
-includes = ["**/*.nix"]
+includes = ["*.nix", "**/*.nix"]
 
 [formatter.python]
 command = "ruff"
 options = ["format"]
-includes = ["**/*.py"]
+includes = ["*.py", "**/*.py"]
 
 [formatter.shell]
 command = "shfmt"
 options = ["-ln", "bash", "-i", "2", "-w"]
-includes = ["**/*.sh", "src/bin/nixos-upgrade", "src/lib/nixos-upgrade-activate"]
+includes = [
+  "*.sh",
+  "**/*.sh",
+  "src/bin/nixos-upgrade",
+  "src/lib/nixos-upgrade-activate",
+]
 
 [formatter.toml]
 command = "taplo"
 options = ["format"]
-includes = ["**/*.toml"]
+includes = ["*.toml", "**/*.toml"]
 
 [formatter.markdown]
 command = "prettier"
 options = ["--write", "--parser", "markdown"]
-includes = ["**/*.md"]
+includes = ["*.md", "**/*.md"]
 
 [formatter.json]
 command = "prettier"
 options = ["--write", "--parser", "jsonc"]
-includes = ["**/*.json", "**/*.jsonc", ".zed/settings.json"]
+includes = [
+  "*.json",
+  "*.jsonc",
+  "**/*.json",
+  "**/*.jsonc",
+  ".zed/settings.json",
+]

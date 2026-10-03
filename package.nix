@@ -1,7 +1,22 @@
-{ lib, stdenv, stdenvNoCC, python3, pandoc, git, nvd, nix, coreutils,
-  glibc, getent, util-linux, jq, shellcheck, ruff,
+{
+  lib,
+  stdenv,
+  stdenvNoCC,
+  python3,
+  pandoc,
+  git,
+  nvd,
+  nix,
+  coreutils,
+  glibc,
+  getent,
+  util-linux,
+  jq,
+  shellcheck,
+  ruff,
   pyOpts ? "-B -s -OO -E -Wignore --check-hash-based-pycs never",
-  compilePythonBytecode ? true }:
+  compilePythonBytecode ? true,
+}:
 
 let
   name = "nixos-upgrade";
@@ -14,10 +29,12 @@ let
   manPage = "./share/man/man8/${name}.8";
   manPageMd = "${manPage}.md";
 
-  pythonWithPkgs = python3.withPackages (ps: with ps; [
-    yaspin
-    termcolor
-  ]);
+  pythonWithPkgs = python3.withPackages (
+    ps: with ps; [
+      yaspin
+      termcolor
+    ]
+  );
   runtimeInputs = [
     pythonWithPkgs
     git
@@ -90,7 +107,10 @@ stdenvNoCC.mkDerivation rec {
   '';
 
   doInstallCheck = true;
-  nativeInstallCheckInputs = [ shellcheck ruff ];
+  nativeInstallCheckInputs = [
+    shellcheck
+    ruff
+  ];
   installCheckPhase = ''
     runHook preCheck
 

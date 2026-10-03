@@ -44,7 +44,7 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
 {
     inputs = {
         # ...
-        
+
         nixos-upgrade = {
           url = "github:otov4its/nixos-upgrade/stable";
           # Optional: aligns standalone outputs with the host revision and can
@@ -52,7 +52,7 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
           inputs.nixpkgs.follows = "nixpkgs";
         }
     };
-    
+
     outputs = { self, ... }@inputs:
     {
         nixosConfigurations = {
@@ -60,7 +60,7 @@ $ nix profile install github:otov4its/nixos-upgrade/stable
 
             modules = [
                 # ...
-                
+
                 inputs.nixos-upgrade.nixosModules.default
                 {
                     programs.nixos-upgrade.enable = true;
@@ -114,7 +114,6 @@ Distributed under the MIT License. See [LICENSE] for more information.
 
 - [nix - the purely functional package manager][nix]
 - [nvd - Nix/NixOS package version diff tool][nvd]
-
 
 [LICENSE]: LICENSE
 [CHANGELOG]: CHANGELOG.md
