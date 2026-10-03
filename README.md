@@ -96,6 +96,8 @@ $ nix build .#dev
 $ ./result-dev/bin/nixos-upgrade
 ```
 
+Maintainers can find the [project architecture guide](docs/architecture.md).
+
 # Changelog
 
 See [CHANGELOG]
