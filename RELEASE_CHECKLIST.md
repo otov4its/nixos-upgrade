@@ -1,13 +1,14 @@
 # Release Checklist
-
-- [ ] package.nix: set `version` to the final SemVer+date form (e.g. `2.0.0+20260929`)
-- [ ] CHANGELOG.md: add a release entry with the same version
-- [ ] check `nix build .#default`
+- [ ] `nix flake check`
+- [ ] `nix build .#default`
+- [ ] package.nix: remove "-rc.1" from `version`, set the current date "YYYYMMDD"
+- [ ] CHANGELOG.md: add title with the current version "X.Y.Z+YYYYMMDD" below "## [Unreleased]"; under "## [Unreleased]", add a "- nothing yet"
 - [ ] git commit -a -m "Release vX.Y.Z"
 - [ ] git checkout stable
 - [ ] git merge main
 - [ ] git tag -a vX.Y.Z
-- [ ] main branch: package.nix: bump `version` for the next release and use a pre-release version such as `2.0.0-rc+20260929`
-- [ ] main branch: git commit -a -m "rc version"
+- [ ] git checkout main
+- [ ] package.nix: add "-rc.1" to `version` "X.Y.Z-rc+YYYYMMDD" and bump version
+- [ ] git commit -a -m "rc version"
 - [ ] git push origin --all
 - [ ] git push origin --tags
